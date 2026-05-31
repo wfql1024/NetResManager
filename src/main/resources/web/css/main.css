@@ -321,6 +321,8 @@
     border-radius: var(--border-radius);
     padding: var(--space-md);
     text-align: center;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .chart-box h3 {
@@ -329,7 +331,15 @@
     color: var(--text-secondary);
 }
 
-.chart-box canvas {
+.chart-canvas-wrap {
+    width: 100%;
+    max-height: 260px;
+    display: flex;
+    justify-content: center;
+}
+
+.chart-canvas-wrap canvas {
+    max-width: 100%;
     max-height: 260px;
 }
 
@@ -379,9 +389,16 @@
     color: var(--text-secondary);
 }
 
-.stats-table td.col-count,
-.stats-table td.col-size {
+.stats-table th:first-child,
+.stats-table td:first-child {
+    text-align: left;
+}
+.stats-table th:nth-child(2),
+.stats-table td:nth-child(2),
+.stats-table th:nth-child(3),
+.stats-table td:nth-child(3) {
     text-align: right;
+    white-space: nowrap;
 }
 
 /* ===== Settings Page ===== */
@@ -618,4 +635,74 @@
 .error-text {
     color: var(--color-danger);
     font-size: var(--font-size-sm);
+}
+
+/* ===== History Page ===== */
+.history-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--space-md);
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+}
+
+.history-group {
+    margin-bottom: var(--space-lg);
+}
+
+.history-group-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: 8px 12px;
+    background: var(--bg-sidebar);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--space-xs);
+    font-size: var(--font-size-sm);
+}
+
+.history-time {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.history-type {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.history-count {
+    color: var(--text-secondary);
+    margin-left: auto;
+}
+
+.history-table {
+    width: 100%;
+    font-size: var(--font-size-sm);
+}
+
+.history-table th {
+    padding: 6px 8px;
+    font-size: var(--font-size-sm);
+}
+
+.history-table td {
+    padding: 4px 8px;
+    font-size: var(--font-size-sm);
+}
+
+.history-row-grey td {
+    color: #aaa;
+}
+
+.history-actions {
+    white-space: nowrap;
+    display: flex;
+    gap: 4px;
+}
+
+.history-actions .btn-sm {
+    font-size: 11px;
+    padding: 2px 6px;
 }

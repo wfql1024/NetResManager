@@ -6,33 +6,26 @@ NRM.components = NRM.components || {};
 NRM.components.statsList = (function() {
     'use strict';
 
-    /**
-     * Renders inline summary items beside the toggle buttons.
-     */
     function renderSummaryInline(summary) {
         var container = document.getElementById('stats-summary-inline');
         if (!container) return;
 
         var items = [
-            { icon: '📁', label: '项目', value: summary.totalProjects || 0 },
-            { icon: '📤', label: '已导出', value: summary.totalExported || 0 },
-            { icon: '🗑️', label: '已回收', value: summary.totalRecycled || 0 },
-            { icon: '📄', label: '类型', value: summary.uniqueFileTypes || 0 },
-            { icon: '🏷️', label: '标签', value: summary.uniqueTags || 0 }
+            { icon: '#', label: '已处理', value: (summary.totalProcessed || 0) },
+            { icon: '#', label: '已导出', value: summary.totalExported || 0 },
+            { icon: '#', label: '已回收', value: summary.totalRecycled || 0 },
+            { icon: '#', label: '类型', value: summary.uniqueFileTypes || 0 },
+            { icon: '#', label: '标签', value: summary.uniqueTags || 0 }
         ];
 
         container.innerHTML = items.map(function(c) {
             return '<span class="stat-inline-item">'
-                + '<span class="stat-icon">' + c.icon + '</span>'
                 + '<span class="stat-value">' + c.value + '</span>'
-                + '<span>' + c.label + '</span>'
+                + '<span> ' + c.label + '</span>'
                 + '</span>';
-        }).join('');
+        }).join(' | ');
     }
 
-    /**
-     * Renders a stats table.
-     */
     function renderTable(tableId, data) {
         var tbody = document.querySelector('#' + tableId + ' tbody');
         if (!tbody) return;
@@ -44,9 +37,9 @@ NRM.components.statsList = (function() {
 
         tbody.innerHTML = data.map(function(d) {
             return '<tr>'
-                + '<td>' + escapeHtml(d.category) + '</td>'
-                + '<td class="col-count">' + d.count + '</td>'
-                + '<td class="col-size">' + (d.totalSizeFormatted || '0 B') + '</td>'
+                + '<td style="text-align:left;">' + escapeHtml(d.category) + '</td>'
+                + '<td style="text-align:right;">' + d.count + '</td>'
+                + '<td style="text-align:right;">' + (d.totalSizeDisplay || d.totalSizeFormatted || '0 B') + '</td>'
                 + '</tr>';
         }).join('');
     }

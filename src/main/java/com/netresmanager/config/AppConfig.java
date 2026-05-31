@@ -26,16 +26,16 @@ public final class AppConfig {
     public static final int MAX_SCAN_ENTRIES = 100_000;
 
     /** Minimum window width */
-    public static final int WINDOW_MIN_WIDTH = 1024;
+    public static final int WINDOW_MIN_WIDTH = 900;
 
     /** Minimum window height */
-    public static final int WINDOW_MIN_HEIGHT = 768;
+    public static final int WINDOW_MIN_HEIGHT = 600;
 
     /** Default window width */
-    public static final int WINDOW_DEFAULT_WIDTH = 1280;
+    public static final int WINDOW_DEFAULT_WIDTH = 1100;
 
     /** Default window height */
-    public static final int WINDOW_DEFAULT_HEIGHT = 860;
+    public static final int WINDOW_DEFAULT_HEIGHT = 700;
 
     /**
      * Returns the application data directory, creating it if necessary.

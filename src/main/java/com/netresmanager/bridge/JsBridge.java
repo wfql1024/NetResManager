@@ -13,11 +13,6 @@ import java.util.logging.Logger;
 
 /**
  * Java-JS bridge exposed as window.javaObject in the WebView.
- * All public methods starting with "js" are callable from JavaScript.
- *
- * Each method returns a JSON envelope string:
- *   {"success": true, "data": ..., "error": null} on success
- *   {"success": false, "data": null, "error": {"code": "...", "message": "..."}} on failure
  */
 public class JsBridge {
 
@@ -72,10 +67,7 @@ public class JsBridge {
     }
 
     public String jsDeleteProject(int id) {
-        return wrap(() -> {
-            projectService.deleteProject(id);
-            return "ok";
-        });
+        return wrap(() -> { projectService.deleteProject(id); return "ok"; });
     }
 
     // ==================== File Scanning ====================
@@ -83,9 +75,7 @@ public class JsBridge {
     public String jsScanProject(int projectId, String dir) {
         return wrap(() -> {
             Project project = projectService.getProject(projectId);
-            if (project == null) {
-                throw new IllegalArgumentException("项目不存在: " + projectId);
-            }
+            if (project == null) throw new IllegalArgumentException("项目不存在: " + projectId);
             return fileScanService.scanProject(project, dir != null && !dir.isEmpty() ? dir : null);
         });
     }
@@ -93,9 +83,7 @@ public class JsBridge {
     public String jsRefreshScan(int projectId, String dir) {
         return wrap(() -> {
             Project project = projectService.getProject(projectId);
-            if (project == null) {
-                throw new IllegalArgumentException("项目不存在: " + projectId);
-            }
+            if (project == null) throw new IllegalArgumentException("项目不存在: " + projectId);
             return fileScanService.refreshScan(project, dir != null && !dir.isEmpty() ? dir : null);
         });
     }
@@ -107,9 +95,7 @@ public class JsBridge {
             List<String> paths = JsonUtil.fromJson(filePathsJson,
                     new TypeToken<List<String>>(){}.getType());
             Project project = projectService.getProject(projectId);
-            if (project == null) {
-                throw new IllegalArgumentException("项目不存在: " + projectId);
-            }
+            if (project == null) throw new IllegalArgumentException("项目不存在: " + projectId);
             return fileOpService.exportFiles(paths, project);
         });
     }
@@ -119,15 +105,9 @@ public class JsBridge {
             List<String> paths = JsonUtil.fromJson(filePathsJson,
                     new TypeToken<List<String>>(){}.getType());
             Project project = projectService.getProject(projectId);
-            if (project == null) {
-                throw new IllegalArgumentException("项目不存在: " + projectId);
-            }
+            if (project == null) throw new IllegalArgumentException("项目不存在: " + projectId);
             return fileOpService.recycleFiles(paths, project);
         });
-    }
-
-    public String jsRollbackBatch(String batchId, String opType) {
-        return wrap(() -> fileOpService.rollbackBatch(batchId, opType));
     }
 
     // ==================== Tags ====================
@@ -137,10 +117,7 @@ public class JsBridge {
     }
 
     public String jsRemoveTag(String filePath, String tagName, int projectId) {
-        return wrap(() -> {
-            tagService.removeTag(filePath, tagName, projectId);
-            return "ok";
-        });
+        return wrap(() -> { tagService.removeTag(filePath, tagName, projectId); return "ok"; });
     }
 
     public String jsGetTagsForFile(String filePath, int projectId) {
@@ -151,97 +128,82 @@ public class JsBridge {
         return wrap(() -> tagService.getAllTags(projectId));
     }
 
-    public String jsGetAllDistinctTagNames(int projectId) {
-        return wrap(() -> tagService.getAllDistinctTagNames(projectId));
-    }
-
     // ==================== Statistics ====================
 
     public String jsGetExportStatsByType(Integer projectId) {
         return wrap(() -> statsService.getExportStatsByType(projectId));
     }
-
     public String jsGetExportStatsByTag(Integer projectId) {
         return wrap(() -> statsService.getExportStatsByTag(projectId));
     }
-
     public String jsGetRecycleStatsByType(Integer projectId) {
         return wrap(() -> statsService.getRecycleStatsByType(projectId));
     }
-
     public String jsGetRecycleStatsByTag(Integer projectId) {
         return wrap(() -> statsService.getRecycleStatsByTag(projectId));
     }
-
     public String jsGetStatsSummary(Integer projectId) {
         return wrap(() -> statsService.getStatsSummary(projectId));
     }
 
-    public String jsSetRecordHidden(String table, int recordId, boolean hidden) {
-        return wrap(() -> {
-            statsService.setRecordHidden(table, recordId, hidden);
-            return "ok";
-        });
+    // ==================== History ====================
+
+    public String jsGetHistory(Integer projectId) {
+        return wrap(() -> statsService.getHistory(projectId));
     }
 
-    public String jsSetRecordExcludeFromStats(String table, int recordId, boolean exclude) {
+    public String jsSetRecordHidden(int recordId, boolean hidden) {
+        return wrap(() -> { statsService.setHidden(recordId, hidden); return "ok"; });
+    }
+
+    public String jsSetRecordExcludeFromStats(int recordId, boolean exclude) {
+        return wrap(() -> { statsService.setExcludeFromStats(recordId, exclude); return "ok"; });
+    }
+
+    public String jsSetRecordDeleted(int recordId, boolean deleted) {
+        return wrap(() -> { statsService.setDeleted(recordId, deleted); return "ok"; });
+    }
+
+    public String jsRollbackRecord(int recordId) {
         return wrap(() -> {
-            statsService.setRecordExcludeFromStats(table, recordId, exclude);
-            return "ok";
+            String error = statsService.rollbackRecord(recordId);
+            if (error != null) return "{\"error\":\"" + error + "\"}";
+            return "{\"success\":true}";
         });
     }
 
     // ==================== Utility ====================
 
-    /**
-     * Opens a directory chooser dialog and returns the selected path.
-     * Since this must run on the JavaFX thread, it uses Platform.runLater via a latch.
-     */
     public String jsPickDirectory() {
         try {
             javafx.stage.DirectoryChooser chooser = new javafx.stage.DirectoryChooser();
             chooser.setTitle("选择目录");
             File dir = chooser.showDialog(null);
-            if (dir != null) {
-                return JsonUtil.successResponse(dir.getAbsolutePath());
-            }
-            return JsonUtil.successResponse(null);
+            return dir != null ? JsonUtil.successResponse(dir.getAbsolutePath())
+                              : JsonUtil.successResponse(null);
         } catch (Exception e) {
             return JsonUtil.errorResponse("PICKER_ERROR", e.getMessage());
         }
     }
 
-    /**
-     * Opens the file explorer at the given path (or the parent dir of a file).
-     */
     public void jsOpenFileExplorer(String path) {
         try {
             File file = new File(path);
-            if (!file.exists()) {
-                return;
-            }
-            if (!file.isDirectory()) {
-                file = file.getParentFile();
-            }
-            if (file != null) {
-                java.awt.Desktop.getDesktop().open(file);
-            }
+            if (!file.exists()) return;
+            if (!file.isDirectory()) file = file.getParentFile();
+            if (file != null) java.awt.Desktop.getDesktop().open(file);
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Failed to open explorer: " + path, e);
         }
     }
 
-    /**
-     * Shows a native dialog message (for critical errors that need user attention).
-     */
     public void jsShowMessage(String title, String msg, String type) {
         try {
-            javafx.scene.control.Alert.AlertType alertType;
-            switch (type != null ? type : "info") {
-                case "warn" -> alertType = javafx.scene.control.Alert.AlertType.WARNING;
-                case "error" -> alertType = javafx.scene.control.Alert.AlertType.ERROR;
-                default -> alertType = javafx.scene.control.Alert.AlertType.INFORMATION;
-            }
+            javafx.scene.control.Alert.AlertType alertType = switch (type != null ? type : "info") {
+                case "warn" -> javafx.scene.control.Alert.AlertType.WARNING;
+                case "error" -> javafx.scene.control.Alert.AlertType.ERROR;
+                default -> javafx.scene.control.Alert.AlertType.INFORMATION;
+            };
             javafx.scene.control.Alert alert = new javafx.scene.control.Alert(alertType);
             alert.setTitle(title);
             alert.setHeaderText(null);
@@ -252,15 +214,11 @@ public class JsBridge {
         }
     }
 
-    // ==================== Internal Helpers ====================
+    // ==================== Internal ====================
 
-    /**
-     * Wraps a callable operation, returning a JSON success/error envelope.
-     */
     private String wrap(ThrowingSupplier<?> supplier) {
         try {
-            Object result = supplier.get();
-            return JsonUtil.successResponse(result);
+            return JsonUtil.successResponse(supplier.get());
         } catch (Exception e) {
             LOG.log(Level.WARNING, "Bridge call failed", e);
             return JsonUtil.errorResponse(e.getClass().getSimpleName(), e.getMessage());
@@ -268,7 +226,5 @@ public class JsBridge {
     }
 
     @FunctionalInterface
-    private interface ThrowingSupplier<T> {
-        T get() throws Exception;
-    }
+    private interface ThrowingSupplier<T> { T get() throws Exception; }
 }

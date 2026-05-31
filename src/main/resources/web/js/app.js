@@ -40,10 +40,10 @@ window.NRM = window.NRM || {};
             }
         },
         showError: function(msg) {
-            console.error(msg);
-            // Show visible toast with error styling
+            var text = msg || '操作失败';
+            console.error(text);
             var toast = document.createElement('div');
-            toast.textContent = msg;
+            toast.textContent = text;
             toast.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#d13438;color:#fff;padding:12px 20px;border-radius:6px;z-index:9999;font-size:14px;max-width:400px;word-wrap:break-word;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
             document.body.appendChild(toast);
             setTimeout(function() {
@@ -97,6 +97,9 @@ window.NRM = window.NRM || {};
                 case 'manage':
                     NRM.pages.manage.init();
                     break;
+                case 'history':
+                    NRM.pages.history.init();
+                    break;
                 case 'statistics':
                     NRM.pages.statistics.init();
                     break;
@@ -106,10 +109,12 @@ window.NRM = window.NRM || {};
             }
         },
         refresh: function() {
-            // Re-init current page
             switch (NRM.state.currentPage) {
                 case 'manage':
                     NRM.pages.manage.refresh();
+                    break;
+                case 'history':
+                    NRM.pages.history.init();
                     break;
                 case 'statistics':
                     NRM.pages.statistics.loadStats();
