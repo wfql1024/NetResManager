@@ -18,14 +18,17 @@ NRM.bridge = (function() {
             var result = JSON.parse(resultJson);
             if (!result.success) {
                 var err = result.error || {};
-                console.error('Bridge error [' + methodName + ']:', err.code, err.message);
-                NRM.ui.showError(err.message || err.code || 'Unknown error');
+                var errMsg = err.message || err.code || '(no message)';
+                var fullMsg = '[' + methodName + '] ' + errMsg;
+                console.error('Bridge error: ' + fullMsg, resultJson);
+                NRM.ui.showError(fullMsg);
                 return null;
             }
             return result.data;
         } catch (e) {
-            console.error('Bridge call failed [' + methodName + ']:', e.message);
-            NRM.ui.showError(e.message);
+            var catchMsg = '[' + methodName + '] JS-Error: ' + (e.message || e);
+            console.error(catchMsg);
+            NRM.ui.showError(catchMsg);
             return null;
         }
     }

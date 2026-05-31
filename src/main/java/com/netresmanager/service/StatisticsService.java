@@ -45,47 +45,47 @@ public class StatisticsService {
     public StatsSummary getStatsSummary(Integer projectId) throws SQLException {
         StatsSummary s = new StatsSummary();
         try (Connection conn = db.getConnection();
-             Statement stmt = conn.createStatement()) {
-
-            String baseWhere = "WHERE status='done' AND exclude_from_stats=0 AND deleted=0";
-            if (projectId != null) baseWhere += " AND project_id=" + projectId;
-
-            // Total processed = export + recycle done records
-            ResultSet rs = stmt.executeQuery(
-                "SELECT operation_type, COUNT(*) FROM operation_records " + baseWhere +
-                " GROUP BY operation_type");
-            while (rs.next()) {
-                String t = rs.getString(1);
-                int c = rs.getInt(2);
-                if ("export".equals(t)) s.totalExported = c;
-                else if ("recycle".equals(t)) s.totalRecycled = c;
+             PreparedStatement ps = conn.prepareStatement(
+                 "SELECT operation_type, COUNT(*), COUNT(DISTINCT file_type) FROM operation_records" +
+                 " WHERE status='done' AND exclude_from_stats=0 AND deleted=0" +
+                 (projectId != null ? " AND project_id=" + projectId : "") +
+                 " GROUP BY operation_type")) {
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String t = rs.getString(1);
+                    int c = rs.getInt(2);
+                    int types = rs.getInt(3);
+                    if ("export".equals(t)) {
+                        s.totalExported = c;
+                    } else if ("recycle".equals(t)) {
+                        s.totalRecycled = c;
+                    }
+                    if (types > s.uniqueFileTypes) s.uniqueFileTypes = types;
+                }
             }
-            s.totalProcessed = s.totalExported + s.totalRecycled;
-
-            rs = stmt.executeQuery("SELECT COUNT(DISTINCT file_type) FROM operation_records " + baseWhere);
-            s.uniqueFileTypes = rs.getInt(1);
-
-            // Count unique tags from tags_json field
-            s.uniqueTags = countDistinctTagsFromJson(conn, projectId);
         }
+        s.totalProcessed = s.totalExported + s.totalRecycled;
+        s.uniqueTags = countDistinctTagsFromJson(projectId);
         return s;
     }
 
     /** Count distinct tag names from operation_records.tags_json */
-    private int countDistinctTagsFromJson(Connection conn, Integer projectId) throws SQLException {
+    private int countDistinctTagsFromJson(Integer projectId) throws SQLException {
         String sql = "SELECT tags_json FROM operation_records " +
-                     "WHERE status='done' AND exclude_from_stats=0 AND deleted=0 AND tags_json != '[]'";
+                     "WHERE status='done' AND exclude_from_stats=0 AND deleted=0";
         if (projectId != null) sql += " AND project_id=" + projectId;
 
         java.util.Set<String> tagSet = new java.util.HashSet<>();
-        try (Statement stmt = conn.createStatement();
+        try (Connection conn = db.getConnection();
+             Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
                 String json = rs.getString("tags_json");
                 if (json != null && !json.isEmpty() && !"[]".equals(json)) {
                     try {
-                        String[] tags = JsonUtil.fromJson(json, String[].class);
-                        if (tags != null) for (String t : tags) tagSet.add(t);
+                        java.util.List<String> tags = JsonUtil.fromJson(json,
+                            new com.google.gson.reflect.TypeToken<java.util.List<String>>(){}.getType());
+                        if (tags != null) tagSet.addAll(tags);
                     } catch (Exception ignored) {}
                 }
             }
@@ -126,13 +126,14 @@ public class StatisticsService {
                 while (rs.next()) {
                     String json = rs.getString("tags_json");
                     long size = rs.getLong("file_size");
-                    String[] tags = null;
+                    java.util.List<String> tags = null;
                     if (json != null && !json.isEmpty() && !"[]".equals(json)) {
                         try {
-                            tags = JsonUtil.fromJson(json, String[].class);
+                            tags = JsonUtil.fromJson(json,
+                                new com.google.gson.reflect.TypeToken<java.util.List<String>>(){}.getType());
                         } catch (Exception e) { /* parse error, treat as no tags */ }
                     }
-                    if (tags == null || tags.length == 0) {
+                    if (tags == null || tags.isEmpty()) {
                         noTagCount++;
                         noTagSize += size;
                     } else {
@@ -274,10 +275,4 @@ public class StatisticsService {
         return r;
     }
 
-    private String formatSize(long bytes) {
-        if (bytes < 1024) return bytes + " B";
-        int exp = (int) (Math.log(bytes) / Math.log(1024));
-        char prefix = "KMGTPE".charAt(exp - 1);
-        return String.format("%.1f %sB", bytes / Math.pow(1024, exp), prefix);
-    }
 }

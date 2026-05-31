@@ -6,11 +6,10 @@ NRM.pages = NRM.pages || {};
 NRM.pages.statistics = (function() {
     'use strict';
 
-    var currentView = 'export'; // 'export' | 'recycle'
+    var currentView = 'export';
     var initialized = false;
 
     function init() {
-        // Only bind events once
         if (!initialized) {
             var toggleBtns = document.querySelectorAll('#page-statistics .stats-btn');
             toggleBtns.forEach(function(btn) {
@@ -21,53 +20,75 @@ NRM.pages.statistics = (function() {
                     loadStats();
                 });
             });
-
             var hideZero = document.getElementById('stats-hide-zero');
             if (hideZero) {
-                hideZero.addEventListener('change', function() {
-                    loadStats();
-                });
+                hideZero.addEventListener('change', function() { loadStats(); });
             }
             initialized = true;
         }
-
-        // Load stats (every time page is shown)
         loadStats();
+    }
+
+    /** Safe bridge call that catches errors individually */
+    function safeCall(label, fn) {
+        try {
+            var result = fn();
+            if (result === null || result === undefined) {
+                console.warn('[Stats] ' + label + ' returned null');
+            }
+            return result;
+        } catch(e) {
+            console.error('[Stats] ' + label + ' exception: ' + (e.message || e));
+            return null;
+        }
     }
 
     function loadStats() {
         var projectId = NRM.state.currentProjectId || null;
-        var hideZeroEl = document.getElementById('stats-hide-zero');
-        var hideZero = hideZeroEl ? hideZeroEl.checked : false;
 
-        // Get stats based on current view
         var byType, byTag;
         if (currentView === 'export') {
-            byType = NRM.bridge.getExportStatsByType(projectId) || [];
-            byTag = NRM.bridge.getExportStatsByTag(projectId) || [];
+            byType = safeCall('getExportStatsByType', function() {
+                return NRM.bridge.getExportStatsByType(projectId);
+            }) || [];
+            byTag = safeCall('getExportStatsByTag', function() {
+                return NRM.bridge.getExportStatsByTag(projectId);
+            }) || [];
         } else {
-            byType = NRM.bridge.getRecycleStatsByType(projectId) || [];
-            byTag = NRM.bridge.getRecycleStatsByTag(projectId) || [];
+            byType = safeCall('getRecycleStatsByType', function() {
+                return NRM.bridge.getRecycleStatsByType(projectId);
+            }) || [];
+            byTag = safeCall('getRecycleStatsByTag', function() {
+                return NRM.bridge.getRecycleStatsByTag(projectId);
+            }) || [];
         }
 
-        // Filter if hide-zero
+        var hideZeroEl = document.getElementById('stats-hide-zero');
+        var hideZero = hideZeroEl ? hideZeroEl.checked : false;
         if (hideZero) {
             byType = byType.filter(function(d) { return d.count > 0; });
             byTag = byTag.filter(function(d) { return d.count > 0; });
         }
 
-        // Render charts
         NRM.components.pieChart.render('chart-by-type', byType, '按类型', true);
         NRM.components.pieChart.render('chart-by-tag', byTag, '按标签', true);
-
-        // Render tables
         NRM.components.statsList.renderTable('table-stats-type', byType);
         NRM.components.statsList.renderTable('table-stats-tag', byTag);
 
-        // Render inline summary
-        var summary = NRM.bridge.getStatsSummary(projectId);
+        // Summary
+        var summary = safeCall('getStatsSummary', function() {
+            return NRM.bridge.getStatsSummary(projectId);
+        });
         if (summary) {
+            console.log('[Stats] summary:', JSON.stringify(summary));
             NRM.components.statsList.renderSummaryInline(summary);
+        } else {
+            console.warn('[Stats] getStatsSummary returned null/undefined');
+            // Fallback: render with zeros
+            NRM.components.statsList.renderSummaryInline({
+                totalProcessed: 0, totalExported: 0, totalRecycled: 0,
+                uniqueFileTypes: 0, uniqueTags: 0
+            });
         }
     }
 
