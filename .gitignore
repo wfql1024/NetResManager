@@ -1,0 +1,33 @@
+# Claude
+.claude/
+memory/
+
+# Maven
+target/
+*.jar
+!src/
+dependency-reduced-pom.xml
+
+# Maven Wrapper
+.mvn/wrapper/maven-home/
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temp
+*.tmp
+*.swp
+*.bak

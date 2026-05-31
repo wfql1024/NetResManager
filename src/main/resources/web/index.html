@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetResManager - 网络资源管理器</title>
+    <link rel="stylesheet" href="css/theme.css">
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+<!-- App Container -->
+<div id="app" class="app-grid">
+
+    <!-- Left Sidebar -->
+    <nav id="nav-sidebar" class="nav-sidebar">
+        <div class="nav-title">NetResManager</div>
+        <ul class="nav-list">
+            <li class="nav-item active" data-page="manage">
+                <span class="nav-icon">📁</span>
+                <span class="nav-label">管理</span>
+            </li>
+            <li class="nav-item" data-page="statistics">
+                <span class="nav-icon">📊</span>
+                <span class="nav-label">统计</span>
+            </li>
+            <li class="nav-item" data-page="settings">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">设置</span>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main id="main-content" class="main-content">
+
+        <!-- Top Bar: Project Tabs -->
+        <div id="top-bar" class="top-bar">
+            <div id="project-tabs" class="project-tabs">
+                <div class="tabs-container"></div>
+                <button class="btn btn-tab-add" title="新建项目" onclick="NRM.components.projectTabs.showCreateDialog()">+</button>
+            </div>
+            <div class="top-bar-title">NetResManager</div>
+        </div>
+
+        <!-- Sub Header: Breadcrumb + Actions -->
+        <div id="sub-header" class="sub-header">
+            <div id="breadcrumb" class="breadcrumb">
+                <span class="breadcrumb-item">请选择一个项目</span>
+            </div>
+            <div class="sub-header-actions">
+                <button class="btn btn-sm" onclick="NRM.router.refresh()" title="刷新">🔄 刷新</button>
+            </div>
+        </div>
+
+        <!-- Page Container -->
+        <div id="page-container" class="page-container">
+
+            <!-- Manage Page -->
+            <div id="page-manage" class="page active">
+                <div id="file-table-container" class="file-table-container">
+                    <table id="file-table" class="file-table">
+                        <thead>
+                            <tr>
+                                <th class="col-check"><input type="checkbox" id="select-all" title="全选"></th>
+                                <th class="col-name sortable" data-sort="name">文件名</th>
+                                <th class="col-type sortable" data-sort="type">类型</th>
+                                <th class="col-size sortable" data-sort="size">大小</th>
+                                <th class="col-date sortable" data-sort="modified">修改日期</th>
+                                <th class="col-tags">标签</th>
+                            </tr>
+                        </thead>
+                        <tbody id="file-table-body">
+                            <tr class="empty-row"><td colspan="5">请选择一个项目并等待扫描完成...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Statistics Page -->
+            <div id="page-statistics" class="page">
+                <div class="stats-toggle">
+                    <button class="btn stats-btn active" data-stats-view="export">导出统计</button>
+                    <button class="btn stats-btn" data-stats-view="recycle">回收统计</button>
+                    <div id="stats-summary-inline" class="stats-summary-inline"></div>
+                    <label class="stats-checkbox">
+                        <input type="checkbox" id="stats-hide-zero"> 隐藏空项
+                    </label>
+                </div>
+                <div class="stats-charts">
+                    <div class="chart-box">
+                        <h3>按类型统计</h3>
+                        <canvas id="chart-by-type" width="300" height="300"></canvas>
+                    </div>
+                    <div class="chart-box">
+                        <h3>按标签统计</h3>
+                        <canvas id="chart-by-tag" width="300" height="300"></canvas>
+                    </div>
+                </div>
+                <div class="stats-lists">
+                    <div class="stats-list-box" id="stats-list-type">
+                        <h3>按类型明细</h3>
+                        <table class="stats-table" id="table-stats-type">
+                            <thead><tr><th>类型</th><th>数量</th><th>总大小</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="stats-list-box" id="stats-list-tag">
+                        <h3>按标签明细</h3>
+                        <table class="stats-table" id="table-stats-tag">
+                            <thead><tr><th>标签</th><th>数量</th><th>总大小</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="page-settings" class="page">
+                <div class="settings-layout">
+                    <div class="settings-sidebar">
+                        <h3>项目列表</h3>
+                        <ul id="project-list-settings" class="project-list-sidebar"></ul>
+                        <button class="btn btn-primary" onclick="NRM.pages.settings.showCreateForm()">+ 新建项目</button>
+                    </div>
+                    <div id="settings-form-container" class="settings-form">
+                        <p class="placeholder-text">选择一个项目编辑，或创建新项目</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<!-- Context Menu (hidden by default) -->
+<div id="context-menu" class="context-menu" style="display:none;">
+    <ul>
+        <li data-action="export" title="重命名后移动到导出目录">📤 导出</li>
+        <li data-action="recycle" title="重命名后移入回收站">🗑️ 回收</li>
+        <li class="menu-sep"></li>
+        <li data-action="tag" title="编辑标签">🏷️ 标签管理</li>
+        <li class="menu-sep"></li>
+        <li data-action="explorer" title="在资源管理器中打开">📂 打开位置</li>
+        <li data-action="copy-path" title="复制路径">📋 复制路径</li>
+    </ul>
+</div>
+
+<!-- Modal Overlay -->
+<div id="modal-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+        <div class="modal-header">
+            <span class="modal-title"></span>
+            <button class="btn-close" onclick="NRM.components.modal.close()">&times;</button>
+        </div>
+        <div class="modal-body"></div>
+        <div class="modal-footer"></div>
+    </div>
+</div>
+
+<!-- Operation Progress Bar -->
+<div id="progress-bar" class="progress-bar" style="display:none;">
+    <div class="progress-bar-fill"></div>
+    <span class="progress-bar-text"></span>
+</div>
+
+<!-- Scripts -->
+<script src="js/bridge.js"></script>
+<script src="js/components/modal-dialog.js"></script>
+<script src="js/components/nav-sidebar.js"></script>
+<script src="js/components/project-tabs.js"></script>
+<script src="js/components/breadcrumb.js"></script>
+<script src="js/components/file-table.js"></script>
+<script src="js/components/context-menu.js"></script>
+<script src="js/components/pie-chart.js"></script>
+<script src="js/components/stats-list.js"></script>
+<script src="js/pages/manage.js"></script>
+<script src="js/pages/statistics.js"></script>
+<script src="js/pages/settings.js"></script>
+<script src="js/lib/chart.umd.min.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
