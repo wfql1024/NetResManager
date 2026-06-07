@@ -28,6 +28,7 @@
                 <span class="nav-icon">📊</span>
                 <span class="nav-label">统计</span>
             </li>
+            <li class="nav-divider"></li>
             <li class="nav-item" data-page="settings">
                 <span class="nav-icon">&#9881;</span>
                 <span class="nav-label">设置</span>
@@ -42,17 +43,23 @@
         <div id="top-bar" class="top-bar">
             <div id="project-tabs" class="project-tabs">
                 <div class="tabs-container"></div>
-                <button class="btn btn-tab-add" title="新建项目" onclick="NRM.components.projectTabs.showCreateDialog()">+</button>
             </div>
-            <div class="top-bar-title">NetResManager</div>
         </div>
 
         <!-- Sub Header: Breadcrumb + Actions -->
         <div id="sub-header" class="sub-header">
-            <div id="breadcrumb" class="breadcrumb">
-                <span class="breadcrumb-item">请选择一个项目</span>
-            </div>
+            <div id="breadcrumb" class="breadcrumb"></div>
             <div class="sub-header-actions">
+                <div id="history-top-actions" class="history-top-actions" style="display:none;">
+                    <button class="btn btn-sm btn-export" onclick="NRM.pages.history.exportData()" title="导出数据为JSON">导出</button>
+                    <button class="btn btn-sm btn-import" onclick="NRM.pages.history.importData()" title="从JSON文件导入数据">导入</button>
+                    <span class="history-top-sep"></span>
+                    <span class="history-top-label" id="history-top-label"></span>
+                    <button class="btn btn-sm" id="btn-top-hide" onclick="NRM.pages.history.batchHide()">隐藏</button>
+                    <button class="btn btn-sm" id="btn-top-delete" onclick="NRM.pages.history.batchDelete()">删除</button>
+                    <button class="btn btn-sm" id="btn-top-exclude" onclick="NRM.pages.history.batchToggleExclude()">不计入</button>
+                    <button class="btn btn-sm" id="btn-top-rollback" onclick="NRM.pages.history.batchRollback()">撤销</button>
+                </div>
                 <button class="btn btn-sm" onclick="NRM.router.refresh()" title="刷新">&#8635; 刷新</button>
             </div>
         </div>
@@ -62,7 +69,19 @@
 
             <!-- Manage Page -->
             <div id="page-manage" class="page active">
-                <div id="file-table-container" class="file-table-container">
+                <!-- "全部" view: project list + edit form (moved from settings) -->
+                <div id="manage-all-view" class="manage-all-layout">
+                    <div class="settings-sidebar">
+                        <h3>项目列表</h3>
+                        <ul id="project-list-manage" class="project-list-sidebar"></ul>
+                        <button class="btn btn-primary" onclick="NRM.pages.manage.showCreateForm()">+ 新建项目</button>
+                    </div>
+                    <div id="manage-all-detail" class="settings-form">
+                        <p class="placeholder-text">选择一个项目编辑，或创建新项目</p>
+                    </div>
+                </div>
+                <!-- Project-specific view: file table -->
+                <div id="manage-project-view" class="file-table-container">
                     <table id="file-table" class="file-table">
                         <thead>
                             <tr>
@@ -75,7 +94,7 @@
                             </tr>
                         </thead>
                         <tbody id="file-table-body">
-                            <tr class="empty-row"><td colspan="5">请选择一个项目并等待扫描完成...</td></tr>
+                            <tr class="empty-row"><td colspan="6">请选择一个项目并等待扫描完成...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -95,7 +114,7 @@
                     <button class="btn stats-btn" data-stats-view="recycle">回收统计</button>
                     <div id="stats-summary-inline" class="stats-summary-inline"></div>
                     <label class="stats-checkbox">
-                        <input type="checkbox" id="stats-hide-zero"> 隐藏空项
+                        <input type="checkbox" id="stats-include-rollback"> 包含撤销
                     </label>
                 </div>
                 <div class="stats-charts">
@@ -130,12 +149,61 @@
             <div id="page-settings" class="page">
                 <div class="settings-layout">
                     <div class="settings-sidebar">
-                        <h3>项目列表</h3>
-                        <ul id="project-list-settings" class="project-list-sidebar"></ul>
-                        <button class="btn btn-primary" onclick="NRM.pages.settings.showCreateForm()">+ 新建项目</button>
+                        <ul id="settings-nav" class="project-list-sidebar">
+                            <li class="active" data-setting="records">记录管理</li>
+                            <li data-setting="about">关于</li>
+                        </ul>
                     </div>
-                    <div id="settings-form-container" class="settings-form">
-                        <p class="placeholder-text">选择一个项目编辑，或创建新项目</p>
+                    <div id="settings-content" class="settings-form">
+                        <div id="settings-section-records" class="settings-section-content" style="display:none;">
+                            <div class="settings-section" id="settings-hidden">
+                                <h3>已隐藏条目</h3>
+                                <div id="settings-hidden-content">
+                                    <p class="placeholder-text">暂无已隐藏的记录</p>
+                                </div>
+                            </div>
+                            <div class="settings-section" id="settings-deleted">
+                                <h3>已删除条目</h3>
+                                <div id="settings-deleted-content">
+                                    <p class="placeholder-text">暂无已删除的记录</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="settings-section-about" class="settings-section-content" style="display:none;">
+                            <div class="about-container">
+                                <div class="about-icon">
+                                    <svg width="72" height="72" viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg">
+                                        <defs>
+                                            <linearGradient id="iconGrad" x1="0" y1="0" x2="1" y2="1">
+                                                <stop offset="0%" stop-color="#0078d4"/>
+                                                <stop offset="100%" stop-color="#00b7c3"/>
+                                            </linearGradient>
+                                        </defs>
+                                        <!-- Rounded background -->
+                                        <rect x="4" y="4" width="64" height="64" rx="12" fill="url(#iconGrad)"/>
+                                        <!-- Folder tab -->
+                                        <path d="M16 22h14l4 4h22v20H16V22z" fill="#fff" opacity="0.95"/>
+                                        <!-- Folder front -->
+                                        <path d="M16 26v16h36V26H16z" fill="#e8f4fd"/>
+                                        <!-- Network nodes -->
+                                        <circle cx="30" cy="36" r="3" fill="#0078d4"/>
+                                        <circle cx="42" cy="32" r="3" fill="#0078d4"/>
+                                        <circle cx="42" cy="42" r="3" fill="#00b7c3"/>
+                                        <!-- Network lines -->
+                                        <line x1="30" y1="36" x2="42" y2="32" stroke="#0078d4" stroke-width="1.5" opacity="0.6"/>
+                                        <line x1="30" y1="36" x2="42" y2="42" stroke="#00b7c3" stroke-width="1.5" opacity="0.6"/>
+                                        <line x1="42" y1="32" x2="42" y2="42" stroke="#50c8d8" stroke-width="1.5" opacity="0.6"/>
+                                    </svg>
+                                </div>
+                                <h2>NetResManager</h2>
+                                <p class="about-version">版本 1.0.0</p>
+                                <p class="about-desc">网络资源管理器 — 多目录文件管理工具</p>
+                                <div class="about-meta">
+                                    <p>作者: <strong>wfql1024</strong></p>
+                                    <p>平台: Windows 11 · JavaFX · SQLite</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

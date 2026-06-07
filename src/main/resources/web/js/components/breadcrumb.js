@@ -60,5 +60,10 @@ NRM.components.breadcrumb = (function() {
         return div.innerHTML;
     }
 
-    return { init: init, render: render };
+    function clear() {
+        if (!container) init();
+        container.innerHTML = '';
+    }
+
+    return { init: init, render: render, clear: clear };
 })();

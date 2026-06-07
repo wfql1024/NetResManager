@@ -57,6 +57,12 @@
     font-size: 18px;
 }
 
+.nav-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 8px var(--space-lg);
+}
+
 /* ===== Main Content Area ===== */
 .main-content {
     display: flex;
@@ -111,6 +117,7 @@
     font-size: var(--font-size-md);
     white-space: nowrap;
     transition: background 0.15s;
+    user-select: none;
 }
 
 .tab-item:hover {
@@ -192,7 +199,10 @@
 
 .sub-header-actions {
     display: flex;
+    align-items: center;
     gap: var(--space-sm);
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
 /* ===== Page Container ===== */
@@ -401,7 +411,19 @@
     white-space: nowrap;
 }
 
-/* ===== Settings Page ===== */
+/* ===== Manage "全部" View ===== */
+.manage-all-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: var(--space-lg);
+    height: 100%;
+}
+
+.manage-all-layout.hidden {
+    display: none;
+}
+
+/* ===== Settings Page (shared layout class) ===== */
 .settings-layout {
     display: grid;
     grid-template-columns: 220px 1fr;
@@ -660,6 +682,17 @@
     border-radius: var(--border-radius);
     margin-bottom: var(--space-xs);
     font-size: var(--font-size-sm);
+    position: relative;
+}
+
+.history-group-header .batch-actions {
+    display: none;
+    margin-left: 8px;
+    gap: 4px;
+}
+
+.history-group-header:hover .batch-actions {
+    display: flex;
 }
 
 .history-time {
@@ -677,32 +710,239 @@
     margin-left: auto;
 }
 
+/* History table: fixed column widths, filename fills remaining */
 .history-table {
     width: 100%;
     font-size: var(--font-size-sm);
+    table-layout: fixed;
 }
 
-.history-table th {
+.history-table th,
+.history-table td {
     padding: 6px 8px;
     font-size: var(--font-size-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
 }
 
-.history-table td {
-    padding: 4px 8px;
-    font-size: var(--font-size-sm);
-}
+.history-table .h-col-check { width: 32px; text-align: center; }
+.history-table .h-col-name { width: auto; }
+.history-table .h-col-type { width: 80px; text-align: center; }
+.history-table .h-col-size { width: 90px; text-align: right; white-space: nowrap; }
 
-.history-row-grey td {
+/* History row states */
+.history-table tr.history-row-grey td {
     color: #aaa;
 }
 
-.history-actions {
-    white-space: nowrap;
-    display: flex;
-    gap: 4px;
+.history-table tr.history-row-selected td {
+    background: var(--bg-selected);
 }
 
-.history-actions .btn-sm {
+/* Hover actions on record rows */
+.history-row-actions {
+    display: none;
+    gap: 3px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+tr.history-data-row:hover .history-row-actions {
+    display: flex;
+}
+
+tr.history-data-row:hover .history-row-actions .btn-sm {
     font-size: 11px;
-    padding: 2px 6px;
+    padding: 2px 5px;
+    line-height: 1.2;
+}
+
+/* Filename cell: name + inline tags + hover actions */
+.history-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+}
+
+.history-name-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+}
+
+.history-name-text.rolled-back {
+    color: #aaa;
+}
+
+.history-inline-tags {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.history-inline-tags .tag-badge {
+    font-size: 10px;
+    padding: 0 5px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+/* Action buttons in sub-header */
+.sub-header-actions .btn-exclude-toggled {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.sub-header-actions .btn-exclude-off {
+    color: var(--text-muted);
+}
+
+/* Rollback button disabled with tooltip */
+.btn-rollback-disabled {
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+/* ===== Settings Page: Hidden/Deleted sections ===== */
+.settings-sections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+}
+
+.settings-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--space-md);
+}
+
+.settings-section h3 {
+    margin-bottom: var(--space-md);
+    font-size: var(--font-size-md);
+    color: var(--text-secondary);
+}
+
+.settings-section .placeholder-text {
+    padding: 20px;
+}
+
+/* Reuse history table styles for settings sections */
+.settings-section .history-table {
+    width: 100%;
+}
+
+.settings-section .history-group {
+    margin-bottom: var(--space-md);
+}
+
+.settings-section .history-group-header {
+    cursor: default;
+}
+
+/* ===== About Page ===== */
+.about-container {
+    text-align: center;
+    padding: var(--space-xl) var(--space-lg);
+}
+
+.about-icon {
+    margin-bottom: var(--space-md);
+    display: flex;
+    justify-content: center;
+}
+
+.about-icon svg {
+    filter: drop-shadow(0 2px 8px rgba(0,120,212,0.25));
+}
+
+.about-container h2 {
+    font-size: var(--font-size-xl);
+    margin-bottom: 4px;
+}
+
+.about-version {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    margin-bottom: var(--space-md);
+}
+
+.about-desc {
+    color: var(--text-secondary);
+    margin-bottom: var(--space-lg);
+}
+
+.about-meta {
+    display: inline-block;
+    text-align: left;
+    background: var(--bg-sidebar);
+    border-radius: var(--border-radius);
+    padding: var(--space-md) var(--space-lg);
+}
+
+.about-meta p {
+    margin-bottom: 4px;
+    font-size: var(--font-size-sm);
+}
+
+/* History top bar separator */
+.history-top-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--border-color);
+    margin: 0 4px;
+}
+
+/* Export / Import buttons */
+.btn-export,
+.btn-import {
+    font-size: 11px;
+    padding: 2px 8px;
+}
+
+/* ===== History & Settings shared ===== */
+
+/* Batch top actions bar */
+.history-top-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-right: auto;
+}
+
+.history-top-label {
+    color: var(--text-muted);
+    font-size: var(--font-size-sm);
+    margin-right: 4px;
+}
+
+/* ===== Settings Page Content ===== */
+.settings-section-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+}
+
+/* Details modal content */
+.details-grid {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 8px 12px;
+    font-size: var(--font-size-sm);
+}
+
+.details-grid .dl {
+    color: var(--text-muted);
+    text-align: right;
+    white-space: nowrap;
+}
+
+.details-grid .dv {
+    color: var(--text-primary);
+    word-break: break-all;
 }

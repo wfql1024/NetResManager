@@ -29,10 +29,28 @@ public class FileOperationService {
 
     private final DatabaseManager db;
     private final TagService tagService;
+    private int batchSeq = 0;           // per-batch sequence counter
+    private String currentBatchPrefix;  // timestamp-uuid prefix for current batch
 
     public FileOperationService() {
         this.db = DatabaseManager.getInstance();
         this.tagService = new TagService();
+    }
+
+    /** Generates a unique record_id: timestamp-uuid-seq */
+    private String generateRecordId() {
+        if (currentBatchPrefix == null) {
+            currentBatchPrefix = System.currentTimeMillis() + "-"
+                + UUID.randomUUID().toString().substring(0, 8);
+            batchSeq = 0;
+        }
+        return currentBatchPrefix + "-" + batchSeq++;
+    }
+
+    /** Resets batch state for a new batch operation */
+    private void resetBatch() {
+        currentBatchPrefix = null;
+        batchSeq = 0;
     }
 
     /**
@@ -40,11 +58,11 @@ public class FileOperationService {
      * On failure, rolls back all successful operations in this batch.
      */
     public BatchResult exportFiles(List<String> filePaths, Project project) {
-        BatchResult result = new BatchResult(generateBatchId(), "export");
+        resetBatch();
+        BatchResult result = new BatchResult("", "export");
         result.totalCount = filePaths.size();
         if (filePaths.isEmpty()) return result;
 
-        String batchTime = LocalDateTime.now().format(DT_FMT);
         Path exportDir = PathValidator.normalize(project.exportDir);
         if (exportDir == null || !PathValidator.isValidDirectory(exportDir)) {
             result.errors.add(new BatchResult.OpError("", "导出目录无效: " + project.exportDir));
@@ -52,29 +70,28 @@ public class FileOperationService {
             return result;
         }
 
-        List<String> donePaths = new ArrayList<>();
+        List<String> doneRecordIds = new ArrayList<>();
         List<String> doneSourcePaths = new ArrayList<>();
 
         for (String filePath : filePaths) {
             Path source = Paths.get(filePath);
             if (!Files.exists(source)) {
-                insertRecord(project.id, result.batchId, "export", filePath, "",
-                        source.getFileName().toString(), "", batchTime, "failed");
+                String recordId = generateRecordId();
+                insertRecord(recordId, project.id, "export", filePath, "");
                 result.failCount++;
                 result.errors.add(new BatchResult.OpError(filePath, "文件不存在"));
                 continue;
             }
 
-            String originalName = source.getFileName().toString();
-            String newName = (project.exportPrefix != null ? project.exportPrefix : "") + " " + originalName;
+            String newName = (project.exportPrefix != null ? project.exportPrefix : "") + " " + source.getFileName().toString();
             long fileSize = PathValidator.getFileSizeSafe(source);
             String fileType = PathValidator.getFileTypeDisplay(source);
             String tagsJson = getTagsJson(filePath, project.id);
             String destPathStr = exportDir.resolve(newName).toString();
+            String recordId = generateRecordId();
 
-            int recordId = insertRecordFull(project.id, result.batchId, "export",
-                    filePath, destPathStr, originalName, newName, batchTime,
-                    tagsJson, fileType, fileSize, "pending");
+            insertRecordFull(recordId, project.id, "export", filePath, destPathStr,
+                    tagsJson, fileType, fileSize);
 
             try {
                 Path renamed = source.resolveSibling(newName);
@@ -84,17 +101,17 @@ public class FileOperationService {
 
                 String successTime = LocalDateTime.now().format(DT_FMT);
                 updateRecordSuccess(recordId, successTime);
-                donePaths.add(dest.toString());
+                doneRecordIds.add(recordId);
                 doneSourcePaths.add(filePath);
                 result.successCount++;
 
             } catch (IOException e) {
                 LOG.log(Level.WARNING, "Export failed: " + filePath, e);
-                updateRecordFailed(recordId);
+                // Leave dest_path empty to indicate failure
                 result.failCount++;
                 result.errors.add(new BatchResult.OpError(filePath, e.getMessage()));
 
-                rollbackExportBatch(result.batchId, donePaths, doneSourcePaths);
+                rollbackExportBatch(doneRecordIds, doneSourcePaths);
                 result.rolledBack = true;
                 result.successCount = 0;
                 break;
@@ -112,33 +129,32 @@ public class FileOperationService {
      * Recycles a batch of files.
      */
     public BatchResult recycleFiles(List<String> filePaths, Project project) {
-        BatchResult result = new BatchResult(generateBatchId(), "recycle");
+        resetBatch();
+        BatchResult result = new BatchResult("", "recycle");
         result.totalCount = filePaths.size();
         if (filePaths.isEmpty()) return result;
 
-        String batchTime = LocalDateTime.now().format(DT_FMT);
         List<String> doneSourcePaths = new ArrayList<>();
 
         for (String filePath : filePaths) {
             Path source = Paths.get(filePath);
             if (!Files.exists(source)) {
-                insertRecord(project.id, result.batchId, "recycle", filePath, "",
-                        source.getFileName().toString(), "", batchTime, "failed");
+                String recordId = generateRecordId();
+                insertRecord(recordId, project.id, "recycle", filePath, "");
                 result.failCount++;
                 result.errors.add(new BatchResult.OpError(filePath, "文件不存在"));
                 continue;
             }
 
-            String originalName = source.getFileName().toString();
-            String newName = (project.recyclePrefix != null ? project.recyclePrefix : "") + " " + originalName;
+            String newName = (project.recyclePrefix != null ? project.recyclePrefix : "") + " " + source.getFileName().toString();
             long fileSize = PathValidator.getFileSizeSafe(source);
             String fileType = PathValidator.getFileTypeDisplay(source);
             String tagsJson = getTagsJson(filePath, project.id);
             String renamedPathStr = source.resolveSibling(newName).toString();
+            String recordId = generateRecordId();
 
-            int recordId = insertRecordFull(project.id, result.batchId, "recycle",
-                    filePath, renamedPathStr, originalName, newName, batchTime,
-                    tagsJson, fileType, fileSize, "pending");
+            insertRecordFull(recordId, project.id, "recycle", filePath, renamedPathStr,
+                    tagsJson, fileType, fileSize);
 
             try {
                 Path renamed = source.resolveSibling(newName);
@@ -151,15 +167,15 @@ public class FileOperationService {
                     doneSourcePaths.add(filePath);
                     result.successCount++;
                 } else {
-                    // Rename back
+                    // Rename back and clear dest_path to indicate failure
                     Files.move(renamed, source);
-                    updateRecordFailed(recordId);
+                    clearDestPath(recordId);
                     result.failCount++;
                     result.errors.add(new BatchResult.OpError(filePath, "移入回收站失败"));
                 }
             } catch (IOException e) {
                 LOG.log(Level.WARNING, "Recycle failed: " + filePath, e);
-                updateRecordFailed(recordId);
+                clearDestPath(recordId);
                 result.failCount++;
                 result.errors.add(new BatchResult.OpError(filePath, e.getMessage()));
             }
@@ -174,46 +190,46 @@ public class FileOperationService {
 
     /**
      * Manual rollback for a single operation record.
-     * On failure, sets rollback_failure_reason so user can see it's greyed out.
+     * Each record is independent — one failure does not affect others.
+     *
+     * Verification logic:
+     *   1. Calculate expected file location after rollback
+     *   2. Perform the rollback operation
+     *   3. Verify the file exists at the expected location
+     *
+     * On success: sets rollback_failure_reason = 'success'
+     * On failure: sets rollback_failure_reason = failure reason text
      */
-    public String rollbackRecord(int recordId) {
-        String sql = "SELECT * FROM operation_records WHERE id=?";
+    public String rollbackRecord(String recordId) {
+        String sql = "SELECT * FROM operation_records WHERE record_id=?";
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, recordId);
+            ps.setString(1, recordId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return "记录不存在";
 
                 String type = rs.getString("operation_type");
-                String destPath = rs.getString("dest_path");
-                String sourcePath = rs.getString("source_path");
-                String rollbackReason = rs.getString("rollback_failure_reason");
+                String destPathStr = rs.getString("dest_path");
+                String sourcePathStr = rs.getString("source_path");
+                String existingRollback = rs.getString("rollback_failure_reason");
 
-                if (rollbackReason != null && !rollbackReason.isEmpty()) {
-                    return "该记录已无法撤回: " + rollbackReason;
+                // Failed operation: dest_path is empty
+                if (destPathStr == null || destPathStr.isEmpty()) {
+                    return "原始操作未成功，无法撤销";
                 }
 
+                // Already rolled back successfully
+                if ("success".equals(existingRollback)) {
+                    return null; // already done, not an error
+                }
+
+                // Already attempted and failed — allow retry
+                // (fall through to attempt again)
+
                 if ("export".equals(type)) {
-                    try {
-                        Path dest = Paths.get(destPath);
-                        Path src = Paths.get(sourcePath);
-                        if (Files.exists(dest)) {
-                            Files.move(dest, src.resolveSibling(dest.getFileName()),
-                                    StandardCopyOption.REPLACE_EXISTING);
-                            Files.move(src.resolveSibling(dest.getFileName()), src);
-                        }
-                        markRolledBack(recordId);
-                        return null; // success
-                    } catch (IOException e) {
-                        String reason = e.getMessage();
-                        setRollbackFailure(recordId, reason);
-                        return reason;
-                    }
+                    return rollbackExport(recordId, sourcePathStr, destPathStr);
                 } else {
-                    // Recycle rollback: try to restore from recycle bin
-                    // This is unreliable; mark as failed
-                    setRollbackFailure(recordId, "回收站操作不支持撤回");
-                    return "回收站操作不支持撤回";
+                    return rollbackRecycle(recordId, sourcePathStr, destPathStr);
                 }
             }
         } catch (SQLException e) {
@@ -221,118 +237,209 @@ public class FileOperationService {
         }
     }
 
-    // ===== DB helpers =====
+    /**
+     * Rollback an export operation: move file from export dir back to original location.
+     */
+    private String rollbackExport(String recordId, String sourcePathStr, String destPathStr) {
+        Path sourcePath = Paths.get(sourcePathStr);
+        Path destPath = Paths.get(destPathStr);
 
-    private int insertRecordFull(int projectId, String batchId, String opType,
-                              String sourcePath, String destPath,
-                              String originalName, String newName,
-                              String opTime, String tagsJson,
-                              String fileType, long fileSize, String status) {
-        String sql = "INSERT INTO operation_records (project_id, batch_id, operation_type, " +
-                     "source_path, dest_path, original_name, new_name, operation_time, " +
-                     "tags_json, file_type, file_size, status) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setInt(1, projectId);
-            ps.setString(2, batchId);
-            ps.setString(3, opType);
-            ps.setString(4, sourcePath);
-            ps.setString(5, destPath);
-            ps.setString(6, originalName);
-            ps.setString(7, newName);
-            ps.setString(8, opTime);
-            ps.setString(9, tagsJson);
-            ps.setString(10, fileType);
-            ps.setLong(11, fileSize);
-            ps.setString(12, status);
-            ps.executeUpdate();
-            try (ResultSet rs = ps.getGeneratedKeys()) {
-                if (rs.next()) return rs.getInt(1);
+        // Step 1: Check if the exported file exists
+        if (!Files.exists(destPath)) {
+            String reason = "导出目录中已找不到该文件";
+            setRollbackFailed(recordId, reason);
+            return reason;
+        }
+
+        // Step 2: Check for conflicts at target location
+        if (Files.exists(sourcePath)) {
+            String reason = "目标位置已有同名文件";
+            setRollbackFailed(recordId, reason);
+            return reason;
+        }
+
+        // Step 3: Perform the move
+        try {
+            // Ensure parent directory exists
+            Path parent = sourcePath.getParent();
+            if (parent != null && !Files.exists(parent)) {
+                Files.createDirectories(parent);
             }
-        } catch (SQLException e) {
-            LOG.log(Level.WARNING, "Failed to insert operation record", e);
+            Files.move(destPath, sourcePath, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            String reason = "移动失败: " + e.getMessage();
+            setRollbackFailed(recordId, reason);
+            return reason;
         }
-        return -1;
+
+        // Step 4: Verify the file exists at the original location
+        if (Files.exists(sourcePath)) {
+            setRollbackSuccess(recordId);
+            return null; // success
+        } else {
+            // Try to move back
+            try {
+                if (Files.exists(sourcePath)) {
+                    Files.move(sourcePath, destPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (IOException ignored) {}
+            String reason = "移动后文件未出现在预期位置";
+            setRollbackFailed(recordId, reason);
+            return reason;
+        }
     }
 
-    /** Simple insert (file not found / fast fail) */
-    private int insertRecord(int projectId, String batchId, String opType,
-                              String sourcePath, String destPath,
-                              String originalName, String newName,
-                              String opTime, String status) {
-        return insertRecordFull(projectId, batchId, opType, sourcePath, destPath,
-                originalName, newName, opTime, "[]", "", 0, status);
+    /**
+     * Rollback a recycle operation: restore file from recycle bin if possible.
+     * Windows recycle bin restore is complex; most attempts will fail with
+     * a clear message asking the user to restore manually.
+     */
+    private String rollbackRecycle(String recordId, String sourcePathStr, String destPathStr) {
+        Path sourcePath = Paths.get(sourcePathStr);
+        Path destPath = Paths.get(destPathStr);
+
+        // Case 1: The renamed file still exists (recycle bin send may have failed
+        // but the operation was marked as done, or permissions prevented deletion)
+        if (Files.exists(destPath)) {
+            // Check for conflict
+            if (Files.exists(sourcePath)) {
+                String reason = "目标位置已有同名文件";
+                setRollbackFailed(recordId, reason);
+                return reason;
+            }
+            // Rename back to original name
+            try {
+                Files.move(destPath, sourcePath, StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e) {
+                String reason = "重命名失败: " + e.getMessage();
+                setRollbackFailed(recordId, reason);
+                return reason;
+            }
+            // Verify
+            if (Files.exists(sourcePath)) {
+                setRollbackSuccess(recordId);
+                return null;
+            } else {
+                String reason = "重命名后文件未出现在预期位置";
+                setRollbackFailed(recordId, reason);
+                return reason;
+            }
+        }
+
+        // Case 2: Source file already exists (someone manually restored it)
+        if (Files.exists(sourcePath)) {
+            setRollbackSuccess(recordId);
+            return null; // already restored, treat as success
+        }
+
+        // Case 3: File is in recycle bin — can't restore programmatically
+        String reason = "文件已在回收站中，请手动从回收站还原";
+        setRollbackFailed(recordId, reason);
+        return reason;
     }
 
-    private void updateRecordSuccess(int recordId, String successTime) {
-        String sql = "UPDATE operation_records SET status='done', success_time=? WHERE id=?";
+    // ===== Rollback status helpers =====
+
+    private void setRollbackSuccess(String recordId) {
+        String sql = "UPDATE operation_records SET rollback_failure_reason='success' WHERE record_id=?";
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, successTime);
-            ps.setInt(2, recordId);
+            ps.setString(1, recordId);
             ps.executeUpdate();
         } catch (SQLException e) {
-            LOG.log(Level.WARNING, "Failed to update record success", e);
+            LOG.log(Level.WARNING, "Failed to set rollback success", e);
         }
     }
 
-    private void updateRecordFailed(int recordId) {
-        String sql = "UPDATE operation_records SET status='failed' WHERE id=?";
+    private void setRollbackFailed(String recordId, String reason) {
+        String sql = "UPDATE operation_records SET rollback_failure_reason=? WHERE record_id=?";
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, recordId);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            LOG.log(Level.WARNING, "Failed to update record failed", e);
-        }
-    }
-
-    private void markRolledBack(int recordId) {
-        String sql = "UPDATE operation_records SET status='rolled_back' WHERE id=?";
-        try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, recordId);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            LOG.log(Level.WARNING, "Failed to mark rolled back", e);
-        }
-    }
-
-    private void setRollbackFailure(int recordId, String reason) {
-        String sql = "UPDATE operation_records SET rollback_failure_reason=?, status='rolled_back' WHERE id=?";
-        try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, reason);
-            ps.setInt(2, recordId);
+            ps.setString(1, reason != null ? reason : "未知原因");
+            ps.setString(2, recordId);
             ps.executeUpdate();
         } catch (SQLException e) {
             LOG.log(Level.WARNING, "Failed to set rollback failure", e);
         }
     }
 
-    private void rollbackExportBatch(String batchId, List<String> destPaths, List<String> sourcePaths) {
-        for (int i = 0; i < Math.min(destPaths.size(), sourcePaths.size()); i++) {
-            try {
-                Path dest = Paths.get(destPaths.get(i));
-                Path src = Paths.get(sourcePaths.get(i));
-                if (Files.exists(dest)) {
-                    Files.move(dest, src.resolveSibling(dest.getFileName()),
-                            StandardCopyOption.REPLACE_EXISTING);
-                    Files.move(src.resolveSibling(dest.getFileName()), src);
-                }
-            } catch (IOException e) {
-                LOG.log(Level.SEVERE, "Rollback failed: " + sourcePaths.get(i), e);
-            }
-        }
-        // Mark batch as rolled_back
-        String sql = "UPDATE operation_records SET status='rolled_back' WHERE batch_id=? AND status='done'";
+    // ===== DB helpers =====
+
+    private void insertRecordFull(String recordId, int projectId, String opType,
+                                  String sourcePath, String destPath,
+                                  String tagsJson, String fileType, long fileSize) {
+        String sql = "INSERT INTO operation_records (record_id, project_id, operation_type, " +
+                     "source_path, dest_path, tags_json, file_type, file_size) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, batchId);
+            ps.setString(1, recordId);
+            ps.setInt(2, projectId);
+            ps.setString(3, opType);
+            ps.setString(4, sourcePath);
+            ps.setString(5, destPath);
+            ps.setString(6, tagsJson);
+            ps.setString(7, fileType);
+            ps.setLong(8, fileSize);
             ps.executeUpdate();
         } catch (SQLException e) {
-            LOG.log(Level.WARNING, "Failed to update rollback status", e);
+            LOG.log(Level.WARNING, "Failed to insert operation record", e);
+        }
+    }
+
+    /** Simple insert for failed operations (dest_path empty) */
+    private void insertRecord(String recordId, int projectId, String opType,
+                              String sourcePath, String destPath) {
+        insertRecordFull(recordId, projectId, opType, sourcePath, destPath, "[]", "", 0);
+    }
+
+    private void updateRecordSuccess(String recordId, String successTime) {
+        String sql = "UPDATE operation_records SET success_time=? WHERE record_id=?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, successTime);
+            ps.setString(2, recordId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.log(Level.WARNING, "Failed to update record success", e);
+        }
+    }
+
+    private void clearDestPath(String recordId) {
+        String sql = "UPDATE operation_records SET dest_path='' WHERE record_id=?";
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, recordId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.log(Level.WARNING, "Failed to clear dest_path", e);
+        }
+    }
+
+    private void rollbackExportBatch(List<String> recordIds, List<String> sourcePaths) {
+        for (int i = 0; i < Math.min(recordIds.size(), sourcePaths.size()); i++) {
+            try {
+                String sql = "SELECT dest_path FROM operation_records WHERE record_id=?";
+                try (Connection conn = db.getConnection();
+                     PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, recordIds.get(i));
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            String dest = rs.getString("dest_path");
+                            if (dest != null && !dest.isEmpty()) {
+                                Path destPath = Paths.get(dest);
+                                Path srcPath = Paths.get(sourcePaths.get(i));
+                                if (Files.exists(destPath)) {
+                                    Files.move(destPath, srcPath, StandardCopyOption.REPLACE_EXISTING);
+                                }
+                            }
+                        }
+                    }
+                }
+                setRollbackSuccess(recordIds.get(i));
+            } catch (Exception e) {
+                LOG.log(Level.SEVERE, "Batch rollback failed: " + sourcePaths.get(i), e);
+            }
         }
     }
 
@@ -357,7 +464,4 @@ public class FileOperationService {
         }
     }
 
-    private String generateBatchId() {
-        return UUID.randomUUID().toString().substring(0, 8);
-    }
 }

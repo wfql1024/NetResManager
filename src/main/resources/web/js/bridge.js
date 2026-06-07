@@ -70,18 +70,28 @@ NRM.bridge = (function() {
         getAllTags: function(projectId) { return call('jsGetAllTags', projectId); },
 
         // Statistics
-        getExportStatsByType: function(projectId) { return call('jsGetExportStatsByType', projectId); },
-        getExportStatsByTag: function(projectId) { return call('jsGetExportStatsByTag', projectId); },
-        getRecycleStatsByType: function(projectId) { return call('jsGetRecycleStatsByType', projectId); },
-        getRecycleStatsByTag: function(projectId) { return call('jsGetRecycleStatsByTag', projectId); },
-        getStatsSummary: function(projectId) { return call('jsGetStatsSummary', projectId); },
+        getExportStatsByType: function(projectId, includeRollback) { return call('jsGetExportStatsByType', projectId, includeRollback); },
+        getExportStatsByTag: function(projectId, includeRollback) { return call('jsGetExportStatsByTag', projectId, includeRollback); },
+        getRecycleStatsByType: function(projectId, includeRollback) { return call('jsGetRecycleStatsByType', projectId, includeRollback); },
+        getRecycleStatsByTag: function(projectId, includeRollback) { return call('jsGetRecycleStatsByTag', projectId, includeRollback); },
+        getStatsSummary: function(projectId, includeRollback) { return call('jsGetStatsSummary', projectId, includeRollback); },
 
         // History
         getHistory: function(projectId) { return call('jsGetHistory', projectId); },
+        getHiddenRecords: function(projectId) { return call('jsGetHiddenRecords', projectId); },
+        getDeletedRecords: function(projectId) { return call('jsGetDeletedRecords', projectId); },
         setRecordHidden: function(recordId, hidden) { return call('jsSetRecordHidden', recordId, hidden); },
         setRecordExcludeFromStats: function(recordId, exclude) { return call('jsSetRecordExcludeFromStats', recordId, exclude); },
         setRecordDeleted: function(recordId, deleted) { return call('jsSetRecordDeleted', recordId, deleted); },
         rollbackRecord: function(recordId) { return call('jsRollbackRecord', recordId); },
+
+        // Export / Import
+        exportAllRecords: function() { return call('jsExportAllRecords'); },
+        importRecords: function(json) { return call('jsImportRecords', json); },
+
+        // File dialogs for export/import
+        saveExportFile: function(defaultName, content) { return call('jsSaveExportFile', defaultName, content); },
+        openImportFile: function() { return call('jsOpenImportFile'); },
 
         // Utility
         pickDirectory: function() { return call('jsPickDirectory'); },

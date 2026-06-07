@@ -80,17 +80,25 @@ window.NRM = window.NRM || {};
             var pageEl = document.getElementById('page-' + page);
             if (pageEl) pageEl.classList.add('active');
 
+            // Settings page has no top bar or sub-header
+            var topBar = document.getElementById('top-bar');
+            var subHeader = document.getElementById('sub-header');
+            if (topBar) topBar.style.display = (page === 'settings') ? 'none' : '';
+            if (subHeader) subHeader.style.display = (page === 'settings') ? 'none' : '';
+
+            // Show/hide breadcrumb (only manage page uses it)
+            var breadcrumb = document.getElementById('breadcrumb');
+            if (breadcrumb) breadcrumb.style.display = (page === 'manage') ? '' : 'none';
+
+            // Show/hide page-specific sub-header actions
+            var histActions = document.getElementById('history-top-actions');
+            if (histActions) histActions.style.display = (page === 'history') ? '' : 'none';
+
             // Update nav sidebar
             NRM.components.navSidebar.setActive(page);
 
-            // Render project tabs (statistics page has "全部" tab, settings has none)
-            if (page === 'statistics') {
-                NRM.components.projectTabs.render(true);
-            } else if (page === 'settings') {
-                NRM.components.projectTabs.hide();
-            } else {
-                NRM.components.projectTabs.render(false);
-            }
+            // Render project tabs (manage/history/statistics show "全部" tab, settings hides)
+            NRM.components.projectTabs.render(page);
 
             // Initialize page
             switch (page) {
@@ -111,7 +119,7 @@ window.NRM = window.NRM || {};
         refresh: function() {
             switch (NRM.state.currentPage) {
                 case 'manage':
-                    NRM.pages.manage.refresh();
+                    NRM.pages.manage.init();
                     break;
                 case 'history':
                     NRM.pages.history.init();
@@ -140,7 +148,7 @@ window.NRM = window.NRM || {};
         NRM.state.projects = projects || [];
 
         // Render project tabs
-        NRM.components.projectTabs.render(false);
+        NRM.components.projectTabs.render('manage');
 
         // Navigate to manage page
         NRM.router.navigate('manage');

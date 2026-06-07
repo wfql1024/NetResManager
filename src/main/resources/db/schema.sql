@@ -1,4 +1,4 @@
--- NetResManager Database Schema V2
+-- NetResManager Database Schema V4
 
 PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
@@ -25,24 +25,19 @@ CREATE TABLE IF NOT EXISTS tags (
 );
 
 CREATE TABLE IF NOT EXISTS operation_records (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_id       TEXT PRIMARY KEY,          -- timestamp-uuid-seq
     project_id      INTEGER NOT NULL,
-    batch_id        TEXT    NOT NULL,
-    operation_type  TEXT    NOT NULL,
-    source_path     TEXT    NOT NULL,
-    dest_path       TEXT    NOT NULL DEFAULT '',
-    original_name   TEXT    NOT NULL,
-    new_name        TEXT    NOT NULL DEFAULT '',
+    operation_type  TEXT    NOT NULL,          -- 'export' | 'recycle'
+    source_path     TEXT    NOT NULL,          -- original full path (name/location derivable)
+    dest_path       TEXT    NOT NULL DEFAULT '', -- target path; empty = failed
     file_type       TEXT    NOT NULL DEFAULT '',
     file_size       INTEGER NOT NULL DEFAULT 0,
     tags_json       TEXT    NOT NULL DEFAULT '[]',
-    operation_time  TEXT    NOT NULL,
     success_time    TEXT    NOT NULL DEFAULT '',
-    status          TEXT    NOT NULL DEFAULT 'done',
     hidden          INTEGER NOT NULL DEFAULT 0,
     exclude_from_stats INTEGER NOT NULL DEFAULT 0,
     deleted         INTEGER NOT NULL DEFAULT 0,
-    rollback_failure_reason TEXT NOT NULL DEFAULT '',
+    rollback_failure_reason TEXT NOT NULL DEFAULT '',  -- '' = not attempted, 'success' = ok, other = failure reason
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
@@ -50,8 +45,8 @@ CREATE INDEX IF NOT EXISTS idx_tags_filepath ON tags(file_path);
 CREATE INDEX IF NOT EXISTS idx_tags_project  ON tags(project_id);
 CREATE INDEX IF NOT EXISTS idx_tags_tagname  ON tags(tag_name);
 CREATE INDEX IF NOT EXISTS idx_op_project    ON operation_records(project_id);
-CREATE INDEX IF NOT EXISTS idx_op_batch      ON operation_records(batch_id);
-CREATE INDEX IF NOT EXISTS idx_op_time       ON operation_records(operation_time);
 CREATE INDEX IF NOT EXISTS idx_op_type       ON operation_records(operation_type);
+CREATE INDEX IF NOT EXISTS idx_op_hidden     ON operation_records(hidden);
+CREATE INDEX IF NOT EXISTS idx_op_deleted    ON operation_records(deleted);
 
-PRAGMA user_version = 2;
+PRAGMA user_version = 4;

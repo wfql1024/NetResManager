@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 public class DatabaseManager {
 
     private static final Logger LOG = Logger.getLogger(DatabaseManager.class.getName());
-    private static final int CURRENT_SCHEMA_VERSION = 2;
+    private static final int CURRENT_SCHEMA_VERSION = 4;
 
     private static DatabaseManager instance;
     private final String dbPath;
@@ -117,20 +117,15 @@ public class DatabaseManager {
             "UNIQUE(file_path, tag_name, project_id))");
 
         stmt.execute("CREATE TABLE IF NOT EXISTS operation_records (" +
-            "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "record_id TEXT PRIMARY KEY," +
             "project_id INTEGER NOT NULL," +
-            "batch_id TEXT NOT NULL," +
             "operation_type TEXT NOT NULL," +
             "source_path TEXT NOT NULL," +
             "dest_path TEXT NOT NULL DEFAULT ''," +
-            "original_name TEXT NOT NULL," +
-            "new_name TEXT NOT NULL DEFAULT ''," +
             "file_type TEXT NOT NULL DEFAULT ''," +
             "file_size INTEGER NOT NULL DEFAULT 0," +
             "tags_json TEXT NOT NULL DEFAULT '[]'," +
-            "operation_time TEXT NOT NULL," +
             "success_time TEXT NOT NULL DEFAULT ''," +
-            "status TEXT NOT NULL DEFAULT 'done'," +
             "hidden INTEGER NOT NULL DEFAULT 0," +
             "exclude_from_stats INTEGER NOT NULL DEFAULT 0," +
             "deleted INTEGER NOT NULL DEFAULT 0," +

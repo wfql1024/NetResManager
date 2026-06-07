@@ -130,20 +130,20 @@ public class JsBridge {
 
     // ==================== Statistics ====================
 
-    public String jsGetExportStatsByType(Integer projectId) {
-        return wrap(() -> statsService.getExportStatsByType(projectId));
+    public String jsGetExportStatsByType(Integer projectId, boolean includeRollback) {
+        return wrap(() -> statsService.getExportStatsByType(projectId, includeRollback));
     }
-    public String jsGetExportStatsByTag(Integer projectId) {
-        return wrap(() -> statsService.getExportStatsByTag(projectId));
+    public String jsGetExportStatsByTag(Integer projectId, boolean includeRollback) {
+        return wrap(() -> statsService.getExportStatsByTag(projectId, includeRollback));
     }
-    public String jsGetRecycleStatsByType(Integer projectId) {
-        return wrap(() -> statsService.getRecycleStatsByType(projectId));
+    public String jsGetRecycleStatsByType(Integer projectId, boolean includeRollback) {
+        return wrap(() -> statsService.getRecycleStatsByType(projectId, includeRollback));
     }
-    public String jsGetRecycleStatsByTag(Integer projectId) {
-        return wrap(() -> statsService.getRecycleStatsByTag(projectId));
+    public String jsGetRecycleStatsByTag(Integer projectId, boolean includeRollback) {
+        return wrap(() -> statsService.getRecycleStatsByTag(projectId, includeRollback));
     }
-    public String jsGetStatsSummary(Integer projectId) {
-        return wrap(() -> statsService.getStatsSummary(projectId));
+    public String jsGetStatsSummary(Integer projectId, boolean includeRollback) {
+        return wrap(() -> statsService.getStatsSummary(projectId, includeRollback));
     }
 
     // ==================== History ====================
@@ -152,23 +152,46 @@ public class JsBridge {
         return wrap(() -> statsService.getHistory(projectId));
     }
 
-    public String jsSetRecordHidden(int recordId, boolean hidden) {
+    public String jsGetHiddenRecords(Integer projectId) {
+        return wrap(() -> statsService.getHiddenRecords(projectId));
+    }
+
+    public String jsGetDeletedRecords(Integer projectId) {
+        return wrap(() -> statsService.getDeletedRecords(projectId));
+    }
+
+    public String jsSetRecordHidden(String recordId, boolean hidden) {
         return wrap(() -> { statsService.setHidden(recordId, hidden); return "ok"; });
     }
 
-    public String jsSetRecordExcludeFromStats(int recordId, boolean exclude) {
+    public String jsSetRecordExcludeFromStats(String recordId, boolean exclude) {
         return wrap(() -> { statsService.setExcludeFromStats(recordId, exclude); return "ok"; });
     }
 
-    public String jsSetRecordDeleted(int recordId, boolean deleted) {
+    public String jsSetRecordDeleted(String recordId, boolean deleted) {
         return wrap(() -> { statsService.setDeleted(recordId, deleted); return "ok"; });
     }
 
-    public String jsRollbackRecord(int recordId) {
+    public String jsRollbackRecord(String recordId) {
         return wrap(() -> {
             String error = statsService.rollbackRecord(recordId);
-            if (error != null) return "{\"error\":\"" + error + "\"}";
-            return "{\"success\":true}";
+            if (error != null) throw new RuntimeException(error);
+            return "ok";
+        });
+    }
+
+    // ==================== Export / Import ====================
+
+    public String jsExportAllRecords() {
+        return wrap(() -> statsService.getAllRecordsForExport());
+    }
+
+    public String jsImportRecords(String json) {
+        return wrap(() -> {
+            java.util.List<OperationRecord> records = JsonUtil.fromJson(json,
+                    new TypeToken<java.util.List<OperationRecord>>(){}.getType());
+            statsService.importRecords(records);
+            return "导入成功: " + records.size() + " 条记录";
         });
     }
 
@@ -183,6 +206,57 @@ public class JsBridge {
                               : JsonUtil.successResponse(null);
         } catch (Exception e) {
             return JsonUtil.errorResponse("PICKER_ERROR", e.getMessage());
+        }
+    }
+
+    /**
+     * Opens a save-file dialog for exporting JSON data.
+     * @param defaultName  suggested filename (e.g., "2026-06-07_18-30-00.json")
+     * @param content      JSON string to write
+     * @return success message or error
+     */
+    public String jsSaveExportFile(String defaultName, String content) {
+        try {
+            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+            chooser.setTitle("导出数据");
+            chooser.setInitialFileName(defaultName != null ? defaultName : "export.json");
+            chooser.getExtensionFilters().add(
+                new javafx.stage.FileChooser.ExtensionFilter("JSON 文件", "*.json"));
+            // Default to desktop
+            String desktop = System.getProperty("user.home") + java.io.File.separator + "Desktop";
+            java.io.File desktopDir = new java.io.File(desktop);
+            if (desktopDir.exists() && desktopDir.isDirectory()) {
+                chooser.setInitialDirectory(desktopDir);
+            }
+            java.io.File file = chooser.showSaveDialog(null);
+            if (file != null) {
+                java.nio.file.Files.writeString(file.toPath(), content, java.nio.charset.StandardCharsets.UTF_8);
+                return JsonUtil.successResponse("已导出到: " + file.getAbsolutePath());
+            }
+            return JsonUtil.successResponse(null);
+        } catch (Exception e) {
+            return JsonUtil.errorResponse("SAVE_ERROR", e.getMessage());
+        }
+    }
+
+    /**
+     * Opens a file-open dialog for importing JSON data.
+     * @return file content as string, or null if cancelled
+     */
+    public String jsOpenImportFile() {
+        try {
+            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+            chooser.setTitle("导入数据");
+            chooser.getExtensionFilters().add(
+                new javafx.stage.FileChooser.ExtensionFilter("JSON 文件", "*.json"));
+            java.io.File file = chooser.showOpenDialog(null);
+            if (file != null) {
+                String content = java.nio.file.Files.readString(file.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+                return JsonUtil.successResponse(content);
+            }
+            return JsonUtil.successResponse(null);
+        } catch (Exception e) {
+            return JsonUtil.errorResponse("OPEN_ERROR", e.getMessage());
         }
     }
 

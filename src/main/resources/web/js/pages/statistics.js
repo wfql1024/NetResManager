@@ -1,5 +1,6 @@
 /**
  * statistics.js - Statistics page: pie charts, stats lists, export/recycle toggle.
+ * "包含撤销" checkbox includes rollback-success records in stats with "(已撤销)" prefix.
  */
 NRM.pages = NRM.pages || {};
 
@@ -20,9 +21,9 @@ NRM.pages.statistics = (function() {
                     loadStats();
                 });
             });
-            var hideZero = document.getElementById('stats-hide-zero');
-            if (hideZero) {
-                hideZero.addEventListener('change', function() { loadStats(); });
+            var includeRb = document.getElementById('stats-include-rollback');
+            if (includeRb) {
+                includeRb.addEventListener('change', function() { loadStats(); });
             }
             initialized = true;
         }
@@ -45,29 +46,24 @@ NRM.pages.statistics = (function() {
 
     function loadStats() {
         var projectId = NRM.state.currentProjectId || null;
+        var includeRb = document.getElementById('stats-include-rollback');
+        var includeRollback = includeRb ? includeRb.checked : false;
 
         var byType, byTag;
         if (currentView === 'export') {
             byType = safeCall('getExportStatsByType', function() {
-                return NRM.bridge.getExportStatsByType(projectId);
+                return NRM.bridge.getExportStatsByType(projectId, includeRollback);
             }) || [];
             byTag = safeCall('getExportStatsByTag', function() {
-                return NRM.bridge.getExportStatsByTag(projectId);
+                return NRM.bridge.getExportStatsByTag(projectId, includeRollback);
             }) || [];
         } else {
             byType = safeCall('getRecycleStatsByType', function() {
-                return NRM.bridge.getRecycleStatsByType(projectId);
+                return NRM.bridge.getRecycleStatsByType(projectId, includeRollback);
             }) || [];
             byTag = safeCall('getRecycleStatsByTag', function() {
-                return NRM.bridge.getRecycleStatsByTag(projectId);
+                return NRM.bridge.getRecycleStatsByTag(projectId, includeRollback);
             }) || [];
-        }
-
-        var hideZeroEl = document.getElementById('stats-hide-zero');
-        var hideZero = hideZeroEl ? hideZeroEl.checked : false;
-        if (hideZero) {
-            byType = byType.filter(function(d) { return d.count > 0; });
-            byTag = byTag.filter(function(d) { return d.count > 0; });
         }
 
         NRM.components.pieChart.render('chart-by-type', byType, '按类型', true);
@@ -77,14 +73,11 @@ NRM.pages.statistics = (function() {
 
         // Summary
         var summary = safeCall('getStatsSummary', function() {
-            return NRM.bridge.getStatsSummary(projectId);
+            return NRM.bridge.getStatsSummary(projectId, includeRollback);
         });
         if (summary) {
-            console.log('[Stats] summary:', JSON.stringify(summary));
             NRM.components.statsList.renderSummaryInline(summary);
         } else {
-            console.warn('[Stats] getStatsSummary returned null/undefined');
-            // Fallback: render with zeros
             NRM.components.statsList.renderSummaryInline({
                 totalProcessed: 0, totalExported: 0, totalRecycled: 0,
                 uniqueFileTypes: 0, uniqueTags: 0

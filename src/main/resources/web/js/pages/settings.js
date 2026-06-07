@@ -1,166 +1,203 @@
 /**
- * settings.js - Settings page: project CRUD.
+ * settings.js - Settings page: dual-pane layout.
+ *
+ * Left sidebar: settings items list.
+ * Right content: detail for selected setting.
+ *
+ * Current items:
+ *   - 记录管理: sub-sections for hidden records and deleted records.
  */
 NRM.pages = NRM.pages || {};
 
 NRM.pages.settings = (function() {
     'use strict';
 
-    var editingProjectId = null;
+    var initialized = false;
 
     function init() {
-        renderProjectList();
-        if (!editingProjectId) {
-            document.getElementById('settings-form-container').innerHTML =
-                '<p class="placeholder-text">选择一个项目编辑，或创建新项目</p>';
+        if (!initialized) {
+            attachNavListeners();
+            initialized = true;
+        }
+        // Load content for the active setting
+        var activeItem = document.querySelector('#settings-nav li.active');
+        var setting = activeItem ? activeItem.getAttribute('data-setting') : 'records';
+        showSetting(setting);
+        if (setting === 'records') {
+            loadHidden();
+            loadDeleted();
         }
     }
 
-    function renderProjectList() {
-        var projects = NRM.bridge.getAllProjects();
-        NRM.state.projects = projects || [];
-
-        var list = document.getElementById('project-list-settings');
-        if (!list) return;
-
-        if (!projects || projects.length === 0) {
-            list.innerHTML = '<li style="color:var(--text-muted);padding:8px;">暂无项目</li>';
-            return;
-        }
-
-        list.innerHTML = projects.map(function(p) {
-            var active = (editingProjectId === p.id) ? ' class="active"' : '';
-            return '<li' + active + ' data-id="' + p.id + '">' + escapeHtml(p.name) + '</li>';
-        }).join('');
-
-        // Click handlers
-        list.querySelectorAll('li[data-id]').forEach(function(li) {
+    function attachNavListeners() {
+        var items = document.querySelectorAll('#settings-nav li[data-setting]');
+        items.forEach(function(li) {
             li.addEventListener('click', function() {
-                editingProjectId = parseInt(this.getAttribute('data-id'));
-                showEditForm(editingProjectId);
-                renderProjectList();
+                items.forEach(function(item) { item.classList.remove('active'); });
+                this.classList.add('active');
+                var setting = this.getAttribute('data-setting');
+                showSetting(setting);
             });
         });
     }
 
-    function showCreateForm() {
-        editingProjectId = null;
-        renderProjectList();
-        showEditForm(null);
+    function showSetting(setting) {
+        // Hide all setting sections
+        var sections = document.querySelectorAll('#settings-content .settings-section-content');
+        sections.forEach(function(s) { s.style.display = 'none'; });
+
+        // Show the selected section
+        var el = document.getElementById('settings-section-' + setting);
+        if (el) el.style.display = '';
+
+        // Load data for the section
+        switch (setting) {
+            case 'records':
+                loadHidden();
+                loadDeleted();
+                break;
+        }
     }
 
-    function showEditForm(projectId) {
-        var project = projectId ? NRM.bridge.getProject(projectId) : null;
-        var container = document.getElementById('settings-form-container');
+    // ==================== Hidden Records ====================
+
+    function loadHidden() {
+        var container = document.getElementById('settings-hidden-content');
         if (!container) return;
 
-        var name = project ? project.name : '';
-        var paths = project ? (project.paths || []).join('\n') : '';
-        var exportDir = project ? (project.exportDir || '') : '';
-        var exportPrefix = project ? (project.exportPrefix || '') : '';
-        var recyclePrefix = project ? (project.recyclePrefix || '') : '';
+        var records = NRM.bridge.getHiddenRecords(null) || [];
 
-        container.innerHTML = [
-            '<h3>' + (project ? '编辑项目' : '新建项目') + '</h3>',
-            '<div class="form-group">',
-            '  <label>项目名称</label>',
-            '  <input type="text" id="f-name" value="' + escapeHtml(name) + '" placeholder="输入项目名称">',
-            '</div>',
-            '<div class="form-group">',
-            '  <label>目录路径（每行一个）</label>',
-            '  <textarea id="f-paths" placeholder="C:\\Users\\Example\\Documents\\nD:\\Downloads">' + escapeHtml(paths) + '</textarea>',
-            '</div>',
-            '<div class="form-group">',
-            '  <label>导出目标目录</label>',
-            '  <div class="path-browse-row">',
-            '    <input type="text" id="f-export-dir" value="' + escapeHtml(exportDir) + '" placeholder="导出目录路径">',
-            '    <button class="btn btn-sm" onclick="NRM.pages.settings.browseExportDir()">浏览...</button>',
-            '  </div>',
-            '</div>',
-            '<div class="form-group">',
-            '  <label>导出前缀</label>',
-            '  <input type="text" id="f-export-prefix" value="' + escapeHtml(exportPrefix) + '" placeholder="例如: EXP_">',
-            '</div>',
-            '<div class="form-group">',
-            '  <label>回收前缀</label>',
-            '  <input type="text" id="f-recycle-prefix" value="' + escapeHtml(recyclePrefix) + '" placeholder="例如: REC_">',
-            '</div>',
-            '<div class="form-actions">',
-            '  <button class="btn btn-primary" onclick="NRM.pages.settings.save()">保存</button>',
-            (project ? '<button class="btn btn-danger" onclick="NRM.pages.settings.deleteProject()">删除项目</button>' : ''),
-            '  <button class="btn" onclick="NRM.pages.settings.cancel()">取消</button>',
-            '</div>',
-        ].join('');
-    }
-
-    function browseExportDir() {
-        var dir = NRM.bridge.pickDirectory();
-        if (dir) {
-            var input = document.getElementById('f-export-dir');
-            if (input) input.value = dir;
-        }
-    }
-
-    function save() {
-        var elName = document.getElementById('f-name');
-        var elPaths = document.getElementById('f-paths');
-        var elExportDir = document.getElementById('f-export-dir');
-        var elExportPrefix = document.getElementById('f-export-prefix');
-        var elRecyclePrefix = document.getElementById('f-recycle-prefix');
-
-        var name = elName ? elName.value.trim() : '';
-        var pathsText = elPaths ? elPaths.value.trim() : '';
-        var exportDir = elExportDir ? elExportDir.value.trim() : '';
-        var exportPrefix = elExportPrefix ? elExportPrefix.value.trim() : '';
-        var recyclePrefix = elRecyclePrefix ? elRecyclePrefix.value.trim() : '';
-
-        if (!name) {
-            NRM.ui.showError('请输入项目名称');
+        if (records.length === 0) {
+            container.innerHTML = '<p class="placeholder-text">暂无已隐藏的记录</p>';
             return;
         }
-        var paths = pathsText ? pathsText.split('\n').map(function(p) { return p.trim(); }).filter(function(p) { return p.length > 0; }) : [];
 
-        if (editingProjectId) {
-            var updated = NRM.bridge.updateProject(editingProjectId, name, paths, exportDir, exportPrefix, recyclePrefix);
-            if (updated) {
-                NRM.ui.showToast('项目已更新');
-                editingProjectId = updated.id;
-                renderProjectList();
-                NRM.components.projectTabs.render(NRM.state.currentPage === 'statistics');
-            }
-        } else {
-            var created = NRM.bridge.createProject(name, paths, exportDir, exportPrefix, recyclePrefix);
-            if (created) {
-                NRM.ui.showToast('项目已创建');
-                editingProjectId = created.id;
-                renderProjectList();
-                showEditForm(created.id);
-                NRM.components.projectTabs.render(NRM.state.currentPage === 'statistics');
-            }
+        container.innerHTML = renderGroupedRecords(records, 'unhide');
+    }
+
+    // ==================== Deleted Records ====================
+
+    function loadDeleted() {
+        var container = document.getElementById('settings-deleted-content');
+        if (!container) return;
+
+        var records = NRM.bridge.getDeletedRecords(null) || [];
+
+        if (records.length === 0) {
+            container.innerHTML = '<p class="placeholder-text">暂无已删除的记录</p>';
+            return;
         }
+
+        container.innerHTML = renderGroupedRecords(records, 'restore');
     }
 
-    function deleteProject() {
-        if (!editingProjectId) return;
-        NRM.components.modal.confirm('确认删除', '确定要删除此项目吗？所有相关记录将被永久删除。',
-            function() {
-                NRM.bridge.deleteProject(editingProjectId);
-                NRM.ui.showToast('项目已删除');
-                editingProjectId = null;
-                document.getElementById('settings-form-container').innerHTML =
-                    '<p class="placeholder-text">选择一个项目编辑，或创建新项目</p>';
-                renderProjectList();
-                NRM.components.projectTabs.render(NRM.state.currentPage === 'statistics');
+    // ==================== Shared Rendering ====================
+
+    function renderGroupedRecords(records, actionType) {
+        var groups = [];
+        var groupMap = {};
+        records.forEach(function(r) {
+            var key = r.operationTime;
+            if (!groupMap[key]) {
+                groupMap[key] = { time: key, records: [] };
+                groups.push(groupMap[key]);
             }
-        );
+            groupMap[key].records.push(r);
+        });
+
+        var html = '';
+        groups.forEach(function(group) {
+            var timeLabel = group.time || '未知时间';
+            var firstRec = group.records[0];
+            var isExport = firstRec && firstRec.operationType === 'export';
+            var typeLabel = isExport ? '&#128228; 导出' : '&#9852; 回收';
+            var idsStr = group.records.map(function(r) { return "'" + r.recordId + "'"; }).join(',');
+
+            html += '<div class="history-group">';
+            html += '<div class="history-group-header">';
+            html += '<span class="history-time">' + timeLabel + '</span>';
+            html += '<span class="history-type">' + typeLabel + '</span>';
+            // Batch hover actions (same as history page)
+            html += '<span class="batch-actions">';
+            if (actionType === 'unhide') {
+                html += '<button class="btn btn-sm" onclick="NRM.pages.settings.batchUnhide([' + idsStr + '])">全部取消隐藏</button>';
+            } else {
+                html += '<button class="btn btn-sm" onclick="NRM.pages.settings.batchRestore([' + idsStr + '])">全部恢复</button>';
+            }
+            html += '</span>';
+            html += '<span class="history-count">' + group.records.length + ' 项</span>';
+            html += '</div>';
+
+            html += '<table class="history-table"><thead><tr>';
+            html += '<th class="h-col-name">文件名</th>';
+            html += '<th class="h-col-type">类型</th>';
+            html += '<th class="h-col-size">大小</th>';
+            html += '</tr></thead><tbody>';
+
+            group.records.forEach(function(r) {
+                var tagsHtml = '';
+                if (r.tags && r.tags.length > 0) {
+                    tagsHtml = '<span class="history-inline-tags">' +
+                        r.tags.map(function(t) {
+                            return '<span class="tag-badge">' + escapeHtml(t) + '</span>';
+                        }).join('') + '</span>';
+                }
+
+                html += '<tr class="history-data-row">';
+                html += '<td class="h-col-name">';
+                html += '<div class="history-name-cell">';
+                html += '<span class="history-name-text">' + escapeHtml(r.originalName) + '</span>';
+                html += tagsHtml;
+                // Hover action button at right of filename
+                html += '<span class="history-row-actions">';
+                if (actionType === 'unhide') {
+                    html += '<button class="btn btn-sm" onclick="NRM.pages.settings.unhideRecord(\'' +
+                        r.recordId + '\')">取消隐藏</button>';
+                } else {
+                    html += '<button class="btn btn-sm" onclick="NRM.pages.settings.restoreRecord(\'' +
+                        r.recordId + '\')">恢复记录</button>';
+                }
+                html += '</span>';
+                html += '</div>';
+                html += '</td>';
+                html += '<td class="h-col-type">' + escapeHtml(r.fileType || '') + '</td>';
+                html += '<td class="h-col-size">' + (r.fileSizeFormatted || '0 B') + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+        });
+
+        return html;
     }
 
-    function cancel() {
-        editingProjectId = null;
-        document.getElementById('settings-form-container').innerHTML =
-            '<p class="placeholder-text">选择一个项目编辑，或创建新项目</p>';
-        renderProjectList();
+    function batchUnhide(ids) {
+        ids.forEach(function(id) { NRM.bridge.setRecordHidden(id, false); });
+        NRM.ui.showToast('已取消隐藏 ' + ids.length + ' 条记录');
+        loadHidden();
     }
+
+    function batchRestore(ids) {
+        ids.forEach(function(id) { NRM.bridge.setRecordDeleted(id, false); });
+        NRM.ui.showToast('已恢复 ' + ids.length + ' 条记录');
+        loadDeleted();
+    }
+
+    // ==================== Operations ====================
+
+    function unhideRecord(recordId) {
+        NRM.bridge.setRecordHidden(recordId, false);
+        NRM.ui.showToast('记录已取消隐藏');
+        loadHidden();
+    }
+
+    function restoreRecord(recordId) {
+        NRM.bridge.setRecordDeleted(recordId, false);
+        NRM.ui.showToast('记录已恢复');
+        loadDeleted();
+    }
+
+    // ==================== Helpers ====================
 
     function escapeHtml(str) {
         var div = document.createElement('div');
@@ -170,10 +207,9 @@ NRM.pages.settings = (function() {
 
     return {
         init: init,
-        showCreateForm: showCreateForm,
-        browseExportDir: browseExportDir,
-        save: save,
-        deleteProject: deleteProject,
-        cancel: cancel
+        unhideRecord: unhideRecord,
+        restoreRecord: restoreRecord,
+        batchUnhide: batchUnhide,
+        batchRestore: batchRestore
     };
 })();

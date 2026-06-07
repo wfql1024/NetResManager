@@ -1,12 +1,15 @@
 /**
  * project-tabs.js - Horizontal project tab bar component.
+ *
+ * Supports "全部" tab for manage, history, and statistics pages.
+ * Settings page hides tabs entirely.
  */
 NRM.components = NRM.components || {};
 
 NRM.components.projectTabs = (function() {
     'use strict';
 
-    var isStatsPage = false;
+    var currentPage = 'manage';
 
     function init() {
         // nothing special needed for init
@@ -14,20 +17,24 @@ NRM.components.projectTabs = (function() {
 
     /**
      * Renders project tabs from NRM.state.projects.
-     * If on statistics page, includes an "全部" tab.
+     * @param {string} page - 'manage', 'history', 'statistics', or 'settings'.
+     *   'settings' hides tabs; the other three show a "全部" tab first.
      */
-    function render(isStats) {
-        isStatsPage = !!isStats;
+    function render(page) {
+        currentPage = page || 'manage';
         var container = document.querySelector('.tabs-container');
         if (!container) return;
 
         container.innerHTML = '';
 
-        // "全部" tab on statistics page
-        if (isStatsPage) {
-            var allTab = createTabEl({ id: 0, name: '全部', isAll: true });
-            container.appendChild(allTab);
+        // Hide tabs on settings page
+        if (currentPage === 'settings') {
+            return;
         }
+
+        // "全部" tab for manage, history, statistics
+        var allTab = createTabEl({ id: 0, name: '全部', isAll: true });
+        container.appendChild(allTab);
 
         // Project tabs
         if (NRM.state.projects) {
@@ -46,15 +53,16 @@ NRM.components.projectTabs = (function() {
         tab.className = 'tab-item';
         if (proj.isAll) tab.classList.add('all-tab');
         tab.setAttribute('data-project-id', proj.id);
+        tab.style.cursor = 'pointer';
 
         var label = document.createElement('span');
         label.textContent = proj.name;
-        label.style.cursor = 'pointer';
-        label.addEventListener('click', function(e) {
-            e.stopPropagation();
+        tab.appendChild(label);
+
+        // Entire tab area is clickable
+        tab.addEventListener('click', function() {
             selectProject(proj.id);
         });
-        tab.appendChild(label);
 
         return tab;
     }
@@ -71,7 +79,7 @@ NRM.components.projectTabs = (function() {
 
     function highlightActive() {
         var tabs = document.querySelectorAll('.tabs-container .tab-item');
-        var activeId = isStatsPage && NRM.state.currentProjectId === null ? 0 : NRM.state.currentProjectId;
+        var activeId = (NRM.state.currentProjectId === null) ? 0 : NRM.state.currentProjectId;
         tabs.forEach(function(tab) {
             var tid = parseInt(tab.getAttribute('data-project-id'));
             tab.classList.toggle('active', tid === activeId);
@@ -79,11 +87,22 @@ NRM.components.projectTabs = (function() {
     }
 
     /**
-     * Shows the "create project" modal dialog.
+     * Shows the "create project" form — now on manage "全部" tab.
      */
     function showCreateDialog() {
-        NRM.router.navigate('settings');
-        NRM.pages.settings.showCreateForm();
+        // Select "全部" tab first
+        NRM.state.currentProjectId = null;
+        highlightActive();
+        // Navigate to manage page to show project list
+        if (NRM.state.currentPage !== 'manage') {
+            NRM.router.navigate('manage');
+        } else {
+            NRM.router.refresh();
+        }
+        // Then show create form
+        setTimeout(function() {
+            NRM.pages.manage.showCreateForm();
+        }, 50);
     }
 
     function hide() {
