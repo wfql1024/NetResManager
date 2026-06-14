@@ -48,12 +48,13 @@
 
         <!-- Sub Header: Breadcrumb + Actions -->
         <div id="sub-header" class="sub-header">
+            <div id="history-top-actions-left" class="history-top-actions-left" style="display:none;">
+                <button class="btn btn-sm btn-export" onclick="NRM.pages.history.exportData()" title="导出数据为JSON">导出</button>
+                <button class="btn btn-sm btn-import" onclick="NRM.pages.history.importData()" title="从JSON文件导入数据">导入</button>
+            </div>
             <div id="breadcrumb" class="breadcrumb"></div>
             <div class="sub-header-actions">
                 <div id="history-top-actions" class="history-top-actions" style="display:none;">
-                    <button class="btn btn-sm btn-export" onclick="NRM.pages.history.exportData()" title="导出数据为JSON">导出</button>
-                    <button class="btn btn-sm btn-import" onclick="NRM.pages.history.importData()" title="从JSON文件导入数据">导入</button>
-                    <span class="history-top-sep"></span>
                     <span class="history-top-label" id="history-top-label"></span>
                     <button class="btn btn-sm" id="btn-top-hide" onclick="NRM.pages.history.batchHide()">隐藏</button>
                     <button class="btn btn-sm" id="btn-top-delete" onclick="NRM.pages.history.batchDelete()">删除</button>

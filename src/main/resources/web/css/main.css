@@ -890,12 +890,13 @@ tr.history-data-row:hover .history-row-actions .btn-sm {
     font-size: var(--font-size-sm);
 }
 
-/* History top bar separator */
-.history-top-sep {
-    width: 1px;
-    height: 20px;
-    background: var(--border-color);
-    margin: 0 4px;
+/* Export / Import buttons - left side of sub-header */
+.history-top-actions-left {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+    margin-right: var(--space-md);
 }
 
 /* Export / Import buttons */

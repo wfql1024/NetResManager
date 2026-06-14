@@ -93,6 +93,8 @@ window.NRM = window.NRM || {};
             // Show/hide page-specific sub-header actions
             var histActions = document.getElementById('history-top-actions');
             if (histActions) histActions.style.display = (page === 'history') ? '' : 'none';
+            var histActionsLeft = document.getElementById('history-top-actions-left');
+            if (histActionsLeft) histActionsLeft.style.display = (page === 'history') ? '' : 'none';
 
             // Update nav sidebar
             NRM.components.navSidebar.setActive(page);

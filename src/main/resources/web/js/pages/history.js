@@ -507,7 +507,7 @@ NRM.pages.history = (function() {
 
     function findRecord(id) {
         for (var i = 0; i < allRecordsFlat.length; i++) {
-            if (allRecordsFlat[i].id === id) return allRecordsFlat[i];
+            if (allRecordsFlat[i].recordId === id) return allRecordsFlat[i];
         }
         return null;
     }
