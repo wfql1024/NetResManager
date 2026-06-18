@@ -120,14 +120,40 @@ public final class PathValidator {
     }
 
     /**
-     * Attempts to get file size, returning 0 for directories or on error.
+     * Attempts to get file size. For directories, recursively calculates total size.
+     * Returns 0 on error.
      */
     public static long getFileSizeSafe(Path path) {
         try {
             if (Files.isRegularFile(path)) {
                 return Files.size(path);
             }
+            if (Files.isDirectory(path)) {
+                return getFolderSizeRecursive(path);
+            }
         } catch (IOException ignored) {}
         return 0;
+    }
+
+    /**
+     * Recursively calculates the total size of a directory.
+     * Uses java.io.File for performance.
+     */
+    public static long getFolderSizeRecursive(Path dir) {
+        long total = 0;
+        try {
+            java.io.File[] files = dir.toFile().listFiles();
+            if (files == null) return 0;
+            for (java.io.File f : files) {
+                try {
+                    if (f.isDirectory()) {
+                        total += getFolderSizeRecursive(f.toPath());
+                    } else if (f.isFile()) {
+                        total += f.length();
+                    }
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+        return total;
     }
 }

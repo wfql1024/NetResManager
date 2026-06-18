@@ -93,6 +93,23 @@ NRM.bridge = (function() {
         saveExportFile: function(defaultName, content) { return call('jsSaveExportFile', defaultName, content); },
         openImportFile: function() { return call('jsOpenImportFile'); },
 
+        // Async folder size
+        startFolderSizeCalculation: function(paths) {
+            return call('jsStartFolderSizeCalculation', JSON.stringify(paths));
+        },
+        cancelFolderSizeCalculations: function() {
+            return call('jsCancelFolderSizeCalculations');
+        },
+
+        // Persistence
+        saveLastPage: function(page) {
+            try { window.javaObject.jsSaveLastPage(page); } catch(e) {}
+        },
+        getLastPage: function() { return call('jsGetLastPage'); },
+
+        // System theme
+        getSystemTheme: function() { return call('jsGetSystemTheme'); },
+
         // Utility
         pickDirectory: function() { return call('jsPickDirectory'); },
         openFileExplorer: function(path) {

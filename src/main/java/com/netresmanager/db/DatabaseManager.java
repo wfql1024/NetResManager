@@ -172,13 +172,18 @@ public class DatabaseManager {
             return;
         }
 
-        // Remove comment lines
+        // Remove comment lines AND strip inline comments
         StringBuilder clean = new StringBuilder();
         for (String line : sql.split("\n")) {
             String trimmed = line.trim();
-            if (!trimmed.startsWith("--")) {
-                clean.append(line).append("\n");
+            if (trimmed.startsWith("--")) continue;
+            // Strip inline comments (e.g., "col TEXT, -- note; extra")
+            int commentIdx = trimmed.indexOf("--");
+            if (commentIdx >= 0) {
+                trimmed = trimmed.substring(0, commentIdx).trim();
+                if (trimmed.isEmpty()) continue;
             }
+            clean.append(trimmed).append("\n");
         }
 
         // Execute each statement separately

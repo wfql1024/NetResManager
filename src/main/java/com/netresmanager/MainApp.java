@@ -111,12 +111,14 @@ public class MainApp extends Application {
     /**
      * Registers the JsBridge instance as window.javaObject so JavaScript
      * can call Java methods via window.javaObject.methodName().
+     * Also sets the script executor for async push updates from Java to JS.
      */
     private void registerJsBridge() {
         try {
             JSObject window = (JSObject) webEngine.executeScript("window");
             if (window != null) {
                 window.setMember("javaObject", jsBridge);
+                jsBridge.setScriptExecutor(this::executeScript);
                 LOG.info("JS bridge registered: window.javaObject");
             }
         } catch (Exception e) {

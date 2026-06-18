@@ -52,8 +52,13 @@
                 <button class="btn btn-sm btn-export" onclick="NRM.pages.history.exportData()" title="导出数据为JSON">导出</button>
                 <button class="btn btn-sm btn-import" onclick="NRM.pages.history.importData()" title="从JSON文件导入数据">导入</button>
             </div>
-            <div id="breadcrumb" class="breadcrumb"></div>
             <div class="sub-header-actions">
+                <div id="manage-top-actions" class="history-top-actions" style="display:none;">
+                    <span class="history-top-label" id="manage-top-label"></span>
+                    <button class="btn btn-sm" id="btn-manage-export" onclick="NRM.pages.manage.batchExport()">导出</button>
+                    <button class="btn btn-sm" id="btn-manage-recycle" onclick="NRM.pages.manage.batchRecycle()">回收</button>
+                    <button class="btn btn-sm" id="btn-manage-tag" onclick="NRM.pages.manage.batchTag()">标签</button>
+                </div>
                 <div id="history-top-actions" class="history-top-actions" style="display:none;">
                     <span class="history-top-label" id="history-top-label"></span>
                     <button class="btn btn-sm" id="btn-top-hide" onclick="NRM.pages.history.batchHide()">隐藏</button>
@@ -61,6 +66,7 @@
                     <button class="btn btn-sm" id="btn-top-exclude" onclick="NRM.pages.history.batchToggleExclude()">不计入</button>
                     <button class="btn btn-sm" id="btn-top-rollback" onclick="NRM.pages.history.batchRollback()">撤销</button>
                 </div>
+                <button class="btn btn-sm" id="btn-manage-home" onclick="NRM.pages.manage.goHome()" title="回到多路径首页" style="display:none;">🏠 首页</button>
                 <button class="btn btn-sm" onclick="NRM.router.refresh()" title="刷新">&#8635; 刷新</button>
             </div>
         </div>
@@ -70,7 +76,7 @@
 
             <!-- Manage Page -->
             <div id="page-manage" class="page active">
-                <!-- "全部" view: project list + edit form (moved from settings) -->
+                <!-- "全部" view: project list + edit form -->
                 <div id="manage-all-view" class="manage-all-layout">
                     <div class="settings-sidebar">
                         <h3>项目列表</h3>
@@ -81,23 +87,9 @@
                         <p class="placeholder-text">选择一个项目编辑，或创建新项目</p>
                     </div>
                 </div>
-                <!-- Project-specific view: file table -->
-                <div id="manage-project-view" class="file-table-container">
-                    <table id="file-table" class="file-table">
-                        <thead>
-                            <tr>
-                                <th class="col-check"><input type="checkbox" id="select-all" title="全选"></th>
-                                <th class="col-name sortable" data-sort="name">文件名</th>
-                                <th class="col-type sortable" data-sort="type">类型</th>
-                                <th class="col-size sortable" data-sort="size">大小</th>
-                                <th class="col-date sortable" data-sort="modified">修改日期</th>
-                                <th class="col-tags">标签</th>
-                            </tr>
-                        </thead>
-                        <tbody id="file-table-body">
-                            <tr class="empty-row"><td colspan="6">请选择一个项目并等待扫描完成...</td></tr>
-                        </tbody>
-                    </table>
+                <!-- Project-specific view: file listing (rendered by file-table.js) -->
+                <div id="manage-project-view" class="manage-container" style="display:none;">
+                    <div id="manage-files-container"></div>
                 </div>
             </div>
 
@@ -152,6 +144,7 @@
                     <div class="settings-sidebar">
                         <ul id="settings-nav" class="project-list-sidebar">
                             <li class="active" data-setting="records">记录管理</li>
+                            <li data-setting="appearance">外观</li>
                             <li data-setting="about">关于</li>
                         </ul>
                     </div>
@@ -167,6 +160,17 @@
                                 <h3>已删除条目</h3>
                                 <div id="settings-deleted-content">
                                     <p class="placeholder-text">暂无已删除的记录</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="settings-section-appearance" class="settings-section-content" style="display:none;">
+                            <div class="settings-section">
+                                <h3>主题</h3>
+                                <p style="color:var(--text-secondary);margin-bottom:12px;">选择应用程序的颜色主题</p>
+                                <div class="theme-segmented" id="theme-segmented">
+                                    <button class="theme-seg-btn" data-theme="light">浅色</button>
+                                    <button class="theme-seg-btn" data-theme="dark">深色</button>
+                                    <button class="theme-seg-btn active" data-theme="auto">跟随系统</button>
                                 </div>
                             </div>
                         </div>
@@ -249,7 +253,6 @@
 <script src="js/components/modal-dialog.js"></script>
 <script src="js/components/nav-sidebar.js"></script>
 <script src="js/components/project-tabs.js"></script>
-<script src="js/components/breadcrumb.js"></script>
 <script src="js/components/file-table.js"></script>
 <script src="js/components/context-menu.js"></script>
 <script src="js/components/pie-chart.js"></script>

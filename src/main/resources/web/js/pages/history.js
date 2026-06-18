@@ -16,6 +16,7 @@ NRM.pages.history = (function() {
 
     var selectedRecords = {};   // recordId -> true
     var allRecordsFlat = [];    // flat list of all record objects currently displayed
+    var currentSort = { field: 'name', asc: true };  // sort state for history table
 
     // ==================== Init ====================
 
@@ -27,7 +28,9 @@ NRM.pages.history = (function() {
         selectedRecords = {};
         allRecordsFlat = [];
 
+        NRM.ui.showProgress('加载历史...');
         var records = NRM.bridge.getHistory(projectId) || [];
+        NRM.ui.hideProgress();
 
         if (records.length === 0) {
             container.innerHTML = '<p class="placeholder-text">暂无操作记录</p>';
@@ -54,6 +57,15 @@ NRM.pages.history = (function() {
                 groups.push(groupMap[key]);
             }
             groupMap[key].records.push(r);
+        });
+
+        // Sort groups by time descending (newest first)
+        groups.sort(function(a, b) {
+            var ta = a.time || '';
+            var tb = b.time || '';
+            if (ta > tb) return -1;
+            if (ta < tb) return 1;
+            return 0;
         });
 
         var html = '';
@@ -98,14 +110,17 @@ NRM.pages.history = (function() {
             html += '<span class="history-count">' + group.records.length + ' 项</span>';
             html += '</div>';
 
-            // Table
+            // Table with sortable columns
             html += '<table class="history-table"><thead><tr>';
             html += '<th class="h-col-check"><input type="checkbox" class="group-checkbox" data-ids="' +
                 group.records.map(function(r) { return r.recordId; }).join(',') + '"></th>';
-            html += '<th class="h-col-name">文件名</th>';
-            html += '<th class="h-col-type">类型</th>';
-            html += '<th class="h-col-size">大小</th>';
+            html += '<th class="h-col-name sortable" data-sort="name">文件名 <span class="sort-arrow"></span></th>';
+            html += '<th class="h-col-type sortable" data-sort="type">类型 <span class="sort-arrow"></span></th>';
+            html += '<th class="h-col-size sortable" data-sort="size">大小 <span class="sort-arrow"></span></th>';
             html += '</tr></thead><tbody>';
+
+            // Sort records within this group
+            group.records.sort(historyRecordSort);
 
             group.records.forEach(function(r) {
                 // Rollback status from rollbackFailureReason field (V3 semantics):
@@ -135,7 +150,7 @@ NRM.pages.history = (function() {
                         }).join('') + '</span>';
                 }
 
-                html += '<tr class="' + rowClass + '" data-record-id="' + r.recordId + '">';
+                html += '<tr class="' + rowClass + '" data-record-id="' + r.recordId + '" data-source-path="' + escapeAttr(r.sourcePath || '') + '">';
 
                 // Checkbox
                 html += '<td class="h-col-check">';
@@ -201,7 +216,9 @@ NRM.pages.history = (function() {
 
         // Attach event listeners
         attachCheckboxListeners();
+        attachSortListeners();
         updateTopButtons();
+        updateHistorySortArrows();
     }
 
     // ==================== Selection ====================
@@ -233,6 +250,23 @@ NRM.pages.history = (function() {
                 }
                 var id = row.getAttribute('data-record-id');
                 if (id) toggleSelection(id);
+            });
+
+            // Context menu (right-click)
+            row.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                var id = row.getAttribute('data-record-id');
+                if (id) {
+                    if (!selectedRecords[id]) {
+                        // If right-clicking unselected row, select only it
+                        selectedRecords = {};
+                        selectedRecords[id] = true;
+                        updateAllRowHighlights();
+                        updateGroupCheckboxes();
+                        updateTopButtons();
+                    }
+                    NRM.components.contextMenu.show(e.clientX, e.clientY, 'history');
+                }
             });
         });
 
@@ -567,6 +601,72 @@ NRM.pages.history = (function() {
         NRM.components.modal.show('操作详情', html, null);
     }
 
+    // ==================== Sorting ====================
+
+    function attachSortListeners() {
+        var headers = document.querySelectorAll('#history-container .sortable');
+        headers.forEach(function(th) {
+            th.addEventListener('click', function() {
+                var field = this.getAttribute('data-sort');
+                sortBy(field);
+            });
+        });
+    }
+
+    function sortBy(field) {
+        currentSort.asc = (currentSort.field === field) ? !currentSort.asc : true;
+        currentSort.field = field;
+        init(); // re-render
+    }
+
+    function historyRecordSort(a, b) {
+        var field = currentSort.field;
+        var asc = currentSort.asc;
+        var va, vb;
+        switch (field) {
+            case 'name':
+                va = (a.originalName || '').toLowerCase();
+                vb = (b.originalName || '').toLowerCase();
+                break;
+            case 'type':
+                va = (a.fileType || '').toLowerCase();
+                vb = (b.fileType || '').toLowerCase();
+                break;
+            case 'size':
+                va = a.fileSize || 0;
+                vb = b.fileSize || 0;
+                break;
+            default:
+                return 0;
+        }
+        if (va < vb) return asc ? -1 : 1;
+        if (va > vb) return asc ? 1 : -1;
+        return 0;
+    }
+
+    function updateHistorySortArrows() {
+        var headers = document.querySelectorAll('#history-container .sortable');
+        headers.forEach(function(th) {
+            var field = th.getAttribute('data-sort');
+            var arrow = th.querySelector('.sort-arrow');
+            if (arrow) {
+                if (field === currentSort.field) {
+                    arrow.textContent = currentSort.asc ? '▲' : '▼';
+                } else {
+                    arrow.textContent = '';
+                }
+            }
+        });
+    }
+
+    function updateAllRowHighlights() {
+        var rows = document.querySelectorAll('#history-container tr.history-data-row');
+        rows.forEach(function(row) {
+            var id = row.getAttribute('data-record-id');
+            if (id) updateRowHighlight(id);
+        });
+    }
+
     // ==================== Helpers ====================
 
     function escapeHtml(str) {
@@ -590,6 +690,7 @@ NRM.pages.history = (function() {
         batchRollback: batchRollback,
         showDetails: showDetails,
         exportData: exportData,
-        importData: importData
+        importData: importData,
+        getSelectedIds: getSelectedIds
     };
 })();

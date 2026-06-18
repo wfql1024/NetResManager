@@ -23,7 +23,9 @@ NRM.pages.manage = (function() {
             // "全部" mode: show project list
             if (allView) allView.classList.remove('hidden');
             if (projView) projView.style.display = 'none';
-            NRM.components.breadcrumb.clear();
+            // Hide manage top actions
+            var mta = document.getElementById('manage-top-actions');
+            if (mta) mta.style.display = 'none';
             renderProjectList();
             if (!editingProjectId) {
                 var detail = document.getElementById('manage-all-detail');
@@ -42,7 +44,6 @@ NRM.pages.manage = (function() {
 
             if (groups) {
                 NRM.state.files = groups;
-                NRM.components.breadcrumb.render(NRM.state.currentDirectory);
                 NRM.components.fileTable.render(groups);
             } else {
                 document.getElementById('file-table-body').innerHTML =
@@ -52,6 +53,7 @@ NRM.pages.manage = (function() {
     }
 
     function refresh() {
+        NRM.cancelFolderSizes();
         if (NRM.state.currentProjectId === null) {
             renderProjectList();
             return;
@@ -63,7 +65,6 @@ NRM.pages.manage = (function() {
 
         if (groups) {
             NRM.state.files = groups;
-            NRM.components.breadcrumb.render(NRM.state.currentDirectory);
             NRM.components.fileTable.render(groups);
         }
     }
@@ -71,9 +72,9 @@ NRM.pages.manage = (function() {
     // ==================== File Operations ====================
 
     function doExport(filePaths, projectId) {
-        NRM.ui.showProgress('导出中...');
+        NRM.ui.showBlocking('正在导出 ' + filePaths.length + ' 个文件...');
         var result = NRM.bridge.exportFiles(filePaths, projectId);
-        NRM.ui.hideProgress();
+        NRM.ui.hideBlocking();
 
         if (result) {
             var msg = '导出完成: ' + result.successCount + ' 成功';
@@ -90,14 +91,15 @@ NRM.pages.manage = (function() {
                 });
             }
             NRM.components.modal.alert('导出结果', msg.replace(/\n/g, '<br>'));
+            NRM.state.selectedFiles.clear();
             refresh();
         }
     }
 
     function doRecycle(filePaths, projectId) {
-        NRM.ui.showProgress('回收中...');
+        NRM.ui.showBlocking('正在回收 ' + filePaths.length + ' 个文件...');
         var result = NRM.bridge.recycleFiles(filePaths, projectId);
-        NRM.ui.hideProgress();
+        NRM.ui.hideBlocking();
 
         if (result) {
             var msg = '回收完成: ' + result.successCount + ' 成功';
@@ -111,6 +113,7 @@ NRM.pages.manage = (function() {
                 });
             }
             NRM.components.modal.alert('回收结果', msg.replace(/\n/g, '<br>'));
+            NRM.state.selectedFiles.clear();
             refresh();
         }
     }
@@ -156,7 +159,7 @@ NRM.pages.manage = (function() {
         if (!container) return;
 
         var name = project ? project.name : '';
-        var paths = project ? (project.paths || []).join('\n') : '';
+        var paths = project ? (project.paths || []) : [];
         var exportDir = project ? (project.exportDir || '') : '';
         var exportPrefix = project ? (project.exportPrefix || '') : '';
         var recyclePrefix = project ? (project.recyclePrefix || '') : '';
@@ -168,8 +171,11 @@ NRM.pages.manage = (function() {
             '  <input type="text" id="f-name" value="' + escapeHtml(name) + '" placeholder="输入项目名称">',
             '</div>',
             '<div class="form-group">',
-            '  <label>目录路径（每行一个）</label>',
-            '  <textarea id="f-paths" placeholder="C:\\Users\\Example\\Documents\\nD:\\Downloads">' + escapeHtml(paths) + '</textarea>',
+            '  <label>目录路径</label>',
+            '  <div id="path-list" class="path-list">',
+            buildPathRows(paths),
+            '  </div>',
+            '  <button class="btn btn-sm" onclick="NRM.pages.manage.addPathRow()" style="margin-top:6px;">+ 添加路径</button>',
             '</div>',
             '<div class="form-group">',
             '  <label>导出目标目录</label>',
@@ -204,13 +210,11 @@ NRM.pages.manage = (function() {
 
     function save() {
         var elName = document.getElementById('f-name');
-        var elPaths = document.getElementById('f-paths');
         var elExportDir = document.getElementById('f-export-dir');
         var elExportPrefix = document.getElementById('f-export-prefix');
         var elRecyclePrefix = document.getElementById('f-recycle-prefix');
 
         var name = elName ? elName.value.trim() : '';
-        var pathsText = elPaths ? elPaths.value.trim() : '';
         var exportDir = elExportDir ? elExportDir.value.trim() : '';
         var exportPrefix = elExportPrefix ? elExportPrefix.value.trim() : '';
         var recyclePrefix = elRecyclePrefix ? elRecyclePrefix.value.trim() : '';
@@ -219,7 +223,13 @@ NRM.pages.manage = (function() {
             NRM.ui.showError('请输入项目名称');
             return;
         }
-        var paths = pathsText ? pathsText.split('\n').map(function(p) { return p.trim(); }).filter(function(p) { return p.length > 0; }) : [];
+        // Collect paths from dynamic list
+        var paths = [];
+        var inputs = document.querySelectorAll('#path-list .path-input');
+        inputs.forEach(function(inp) {
+            var val = inp.value.trim();
+            if (val) paths.push(val);
+        });
 
         if (editingProjectId) {
             var updated = NRM.bridge.updateProject(editingProjectId, name, paths, exportDir, exportPrefix, recyclePrefix);
@@ -265,6 +275,81 @@ NRM.pages.manage = (function() {
         renderProjectList();
     }
 
+    // ==================== Top Bar Batch Operations ====================
+
+    function batchExport() {
+        var selected = Array.from(NRM.state.selectedFiles);
+        if (selected.length === 0) return;
+        var projectId = NRM.state.currentProjectId;
+        NRM.components.modal.confirm(
+            '确认导出',
+            '确定要导出选中的 ' + selected.length + ' 个文件吗？',
+            function() { doExport(selected, projectId); }
+        );
+    }
+
+    function batchRecycle() {
+        var selected = Array.from(NRM.state.selectedFiles);
+        if (selected.length === 0) return;
+        var projectId = NRM.state.currentProjectId;
+        NRM.components.modal.confirm(
+            '确认回收',
+            '确定要回收选中的 ' + selected.length + ' 个文件吗？',
+            function() { doRecycle(selected, projectId); }
+        );
+    }
+
+    function batchTag() {
+        var selected = Array.from(NRM.state.selectedFiles);
+        if (selected.length === 0) return;
+        var projectId = NRM.state.currentProjectId;
+        NRM.components.contextMenu.showTagDialog(selected, projectId);
+    }
+
+    // ==================== Path List Editor ====================
+
+    function buildPathRows(paths) {
+        if (!paths || paths.length === 0) {
+            return '<div class="path-row"><input type="text" class="path-input" placeholder="C:\\Users\\Example\\Documents"><button class="btn btn-sm" onclick="NRM.pages.manage.browsePath(this)">浏览...</button><button class="btn btn-sm" onclick="NRM.pages.manage.removePathRow(this)">✕</button></div>';
+        }
+        var html = '';
+        paths.forEach(function(p) {
+            html += '<div class="path-row"><input type="text" class="path-input" value="'
+                + escapeHtml(p) + '"><button class="btn btn-sm" onclick="NRM.pages.manage.browsePath(this)">浏览...</button><button class="btn btn-sm" onclick="NRM.pages.manage.removePathRow(this)">✕</button></div>';
+        });
+        return html;
+    }
+
+    function addPathRow() {
+        var list = document.getElementById('path-list');
+        if (!list) return;
+        var row = document.createElement('div');
+        row.className = 'path-row';
+        row.innerHTML = '<input type="text" class="path-input" placeholder="C:\\Users\\Example\\Documents"><button class="btn btn-sm" onclick="NRM.pages.manage.browsePath(this)">浏览...</button><button class="btn btn-sm" onclick="NRM.pages.manage.removePathRow(this)">✕</button>';
+        list.appendChild(row);
+    }
+
+    function removePathRow(btn) {
+        var row = btn.parentElement;
+        if (row) row.remove();
+    }
+
+    function browsePath(btn) {
+        var dir = NRM.bridge.pickDirectory();
+        if (dir) {
+            var input = btn.parentElement.querySelector('.path-input');
+            if (input) input.value = dir;
+        }
+    }
+
+    // ==================== Navigation ====================
+
+    function goHome() {
+        NRM.state.currentDirectory = '';
+        NRM.state.selectedFiles.clear();
+        NRM.router.refresh();
+    }
+
     // ==================== Helpers ====================
 
     function escapeHtml(str) {
@@ -278,8 +363,15 @@ NRM.pages.manage = (function() {
         refresh: refresh,
         doExport: doExport,
         doRecycle: doRecycle,
+        goHome: goHome,
+        batchExport: batchExport,
+        batchRecycle: batchRecycle,
+        batchTag: batchTag,
         showCreateForm: showCreateForm,
         browseExportDir: browseExportDir,
+        addPathRow: addPathRow,
+        removePathRow: removePathRow,
+        browsePath: browsePath,
         save: save,
         deleteProject: deleteProject,
         cancel: cancel

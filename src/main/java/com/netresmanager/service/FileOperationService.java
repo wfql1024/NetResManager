@@ -64,8 +64,16 @@ public class FileOperationService {
         if (filePaths.isEmpty()) return result;
 
         Path exportDir = PathValidator.normalize(project.exportDir);
-        if (exportDir == null || !PathValidator.isValidDirectory(exportDir)) {
-            result.errors.add(new BatchResult.OpError("", "导出目录无效: " + project.exportDir));
+        if (exportDir == null) {
+            result.errors.add(new BatchResult.OpError("", "导出目录路径无效: " + project.exportDir));
+            result.failCount = filePaths.size();
+            return result;
+        }
+        // Auto-create export directory if it doesn't exist
+        try {
+            Files.createDirectories(exportDir);
+        } catch (IOException e) {
+            result.errors.add(new BatchResult.OpError("", "无法创建导出目录: " + e.getMessage()));
             result.failCount = filePaths.size();
             return result;
         }
@@ -291,8 +299,11 @@ public class FileOperationService {
 
     /**
      * Rollback a recycle operation: restore file from recycle bin if possible.
-     * Windows recycle bin restore is complex; most attempts will fail with
-     * a clear message asking the user to restore manually.
+     *
+     * Strategy (tried in order):
+     *   1. If the renamed file still exists on disk, just rename it back.
+     *   2. If the original file already exists, treat as success.
+     *   3. Scan the Windows Recycle Bin for the file and restore it, then rename.
      */
     private String rollbackRecycle(String recordId, String sourcePathStr, String destPathStr) {
         Path sourcePath = Paths.get(sourcePathStr);
@@ -332,8 +343,18 @@ public class FileOperationService {
             return null; // already restored, treat as success
         }
 
-        // Case 3: File is in recycle bin — can't restore programmatically
-        String reason = "文件已在回收站中，请手动从回收站还原";
+        // Case 3: File is in recycle bin — try programmatic restore
+        // destPath is the renamed file's path (with prefix), which was sent to recycle bin.
+        // We need to find it in $Recycle.Bin using destPath, then restore to sourcePath.
+        boolean restored = com.netresmanager.win32.Shell32RecycleBin
+                .restoreFromRecycleBin(destPathStr, sourcePathStr);
+
+        if (restored && Files.exists(sourcePath)) {
+            setRollbackSuccess(recordId);
+            return null;
+        }
+
+        String reason = "无法从回收站还原文件，请手动从回收站还原后重命名";
         setRollbackFailed(recordId, reason);
         return reason;
     }

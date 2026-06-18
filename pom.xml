@@ -43,6 +43,13 @@
             <version>${sqlite.version}</version>
         </dependency>
 
+        <!-- SLF4J no-op binding (suppress "Failed to load class" warning) -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-nop</artifactId>
+            <version>2.0.9</version>
+        </dependency>
+
         <!-- JNA for Windows Shell32 -->
         <dependency>
             <groupId>net.java.dev.jna</groupId>

@@ -49,6 +49,8 @@ NRM.pages.statistics = (function() {
         var includeRb = document.getElementById('stats-include-rollback');
         var includeRollback = includeRb ? includeRb.checked : false;
 
+        NRM.ui.showProgress('加载统计...');
+
         var byType, byTag;
         if (currentView === 'export') {
             byType = safeCall('getExportStatsByType', function() {
@@ -83,6 +85,8 @@ NRM.pages.statistics = (function() {
                 uniqueFileTypes: 0, uniqueTags: 0
             });
         }
+
+        NRM.ui.hideProgress();
     }
 
     return { init: init, loadStats: loadStats };

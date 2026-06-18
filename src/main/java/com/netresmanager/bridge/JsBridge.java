@@ -8,6 +8,7 @@ import com.netresmanager.util.JsonUtil;
 import java.io.File;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -86,6 +87,77 @@ public class JsBridge {
             if (project == null) throw new IllegalArgumentException("项目不存在: " + projectId);
             return fileScanService.refreshScan(project, dir != null && !dir.isEmpty() ? dir : null);
         });
+    }
+
+    // ==================== Async Folder Size ====================
+
+    /** Sets the script executor for pushing async results back to JS. */
+    public void setScriptExecutor(Consumer<String> executor) {
+        fileScanService.setOnFolderSizeResult(executor);
+    }
+
+    public String jsStartFolderSizeCalculation(String folderPathsJson) {
+        try {
+            List<String> paths = JsonUtil.fromJson(folderPathsJson,
+                    new TypeToken<List<String>>(){}.getType());
+            fileScanService.startAsyncFolderSizeCalculation(paths);
+            return JsonUtil.successResponse("started");
+        } catch (Exception e) {
+            return JsonUtil.errorResponse("FOLDER_SIZE_ERROR", e.getMessage());
+        }
+    }
+
+    public String jsCancelFolderSizeCalculations() {
+        fileScanService.cancelFolderSizeCalculations();
+        return JsonUtil.successResponse("cancelled");
+    }
+
+    // ==================== System Theme ====================
+
+    /**
+     * Detects the Windows system theme by reading the registry.
+     * Returns "dark" if dark mode is enabled, "light" otherwise.
+     */
+    // ==================== App State Persistence ====================
+
+    private static final java.util.prefs.Preferences PREFS =
+        java.util.prefs.Preferences.userNodeForPackage(JsBridge.class);
+
+    public void jsSaveLastPage(String page) {
+        try { PREFS.put("lastPage", page); } catch (Exception e) {}
+    }
+
+    public String jsGetLastPage() {
+        try { return JsonUtil.successResponse(PREFS.get("lastPage", "manage")); }
+        catch (Exception e) { return JsonUtil.successResponse("manage"); }
+    }
+
+    // ==================== System Theme ====================
+
+    public String jsGetSystemTheme() {
+        try {
+            Process p = Runtime.getRuntime().exec(
+                new String[]{"reg", "query",
+                    "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                    "/v", "AppsUseLightTheme"});
+            java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(p.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                // Looking for: "    AppsUseLightTheme    REG_DWORD    0x0"
+                if (line.contains("AppsUseLightTheme")) {
+                    // Value is 0 for dark, 1 for light
+                    if (line.contains("0x0") || line.endsWith("0")) {
+                        return JsonUtil.successResponse("dark");
+                    }
+                    return JsonUtil.successResponse("light");
+                }
+            }
+            p.waitFor();
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Failed to detect system theme", e);
+        }
+        return JsonUtil.successResponse("light"); // default
     }
 
     // ==================== File Operations ====================

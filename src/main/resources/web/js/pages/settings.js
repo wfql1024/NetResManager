@@ -56,6 +56,40 @@ NRM.pages.settings = (function() {
                 loadHidden();
                 loadDeleted();
                 break;
+            case 'appearance':
+                loadAppearance();
+                break;
+        }
+    }
+
+    // ==================== Appearance ====================
+
+    function loadAppearance() {
+        var currentTheme = NRM.state._themePreference || 'auto';
+
+        var buttons = document.querySelectorAll('#theme-segmented .theme-seg-btn');
+        buttons.forEach(function(btn) {
+            var btnTheme = btn.getAttribute('data-theme');
+            if (btnTheme === currentTheme) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // Attach click listeners (only once)
+        if (!loadAppearance._attached) {
+            loadAppearance._attached = true;
+            buttons.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var theme = this.getAttribute('data-theme');
+                    // Update active state
+                    buttons.forEach(function(b) { b.classList.remove('active'); });
+                    this.classList.add('active');
+                    // Save and apply (NRM.applyTheme handles both memory + localStorage)
+                    NRM.applyTheme(theme);
+                });
+            });
         }
     }
 

@@ -1,5 +1,9 @@
 /**
- * context-menu.js - Right-click context menu for file operations.
+ * context-menu.js - Right-click context menu, shared by manage and history pages.
+ *
+ * The menu adapts its items based on currentPage ('manage' or 'history').
+ * Manage page: export, recycle, tag, open location, copy path
+ * History page: rollback, details, hide, delete, exclude
  */
 NRM.components = NRM.components || {};
 
@@ -7,6 +11,7 @@ NRM.components.contextMenu = (function() {
     'use strict';
 
     var menu = null;
+    var currentContext = 'manage'; // 'manage' or 'history'
 
     function init() {
         menu = document.getElementById('context-menu');
@@ -17,19 +22,22 @@ NRM.components.contextMenu = (function() {
             hide();
         });
 
-        // Menu item click handlers
-        menu.querySelectorAll('li[data-action]').forEach(function(item) {
-            item.addEventListener('click', function() {
-                var action = this.getAttribute('data-action');
-                handleAction(action);
-                hide();
-            });
+        // Delegate menu item clicks
+        menu.addEventListener('click', function(e) {
+            var li = e.target.closest('li[data-action]');
+            if (!li) return;
+            var action = li.getAttribute('data-action');
+            handleAction(action);
+            hide();
         });
     }
 
-    function show(x, y) {
+    function show(x, y, context) {
         if (!menu) init();
         if (!menu) return;
+
+        currentContext = context || NRM.state.currentPage || 'manage';
+        renderMenuItems();
 
         // Position menu
         menu.style.display = 'block';
@@ -50,7 +58,42 @@ NRM.components.contextMenu = (function() {
         if (menu) menu.style.display = 'none';
     }
 
+    function renderMenuItems() {
+        var ul = menu.querySelector('ul');
+        if (!ul) return;
+
+        if (currentContext === 'manage') {
+            ul.innerHTML = [
+                '<li data-action="export" title="重命名后移动到导出目录">📤 导出</li>',
+                '<li data-action="recycle" title="重命名后移入回收站">♻ 回收</li>',
+                '<li class="menu-sep"></li>',
+                '<li data-action="tag" title="编辑标签">📌 标签管理</li>',
+                '<li class="menu-sep"></li>',
+                '<li data-action="explorer" title="在资源管理器中打开">📂 打开位置</li>',
+                '<li data-action="copy-path" title="复制路径">📋 复制路径</li>'
+            ].join('');
+        } else {
+            // History page context menu
+            ul.innerHTML = [
+                '<li data-action="rollback" title="撤销此操作">↩ 撤销</li>',
+                '<li data-action="details" title="查看详情">📋 详情</li>',
+                '<li class="menu-sep"></li>',
+                '<li data-action="hide" title="隐藏此记录">👁 隐藏</li>',
+                '<li data-action="delete" title="删除此记录">🗑 删除</li>',
+                '<li data-action="exclude" title="不计入统计">📊 不计入</li>'
+            ].join('');
+        }
+    }
+
     function handleAction(action) {
+        if (currentContext === 'manage') {
+            handleManageAction(action);
+        } else {
+            handleHistoryAction(action);
+        }
+    }
+
+    function handleManageAction(action) {
         var selected = Array.from(NRM.state.selectedFiles);
         if (selected.length === 0) return;
 
@@ -109,6 +152,34 @@ NRM.components.contextMenu = (function() {
         }
     }
 
+    function handleHistoryAction(action) {
+        // Get selected record IDs from history page
+        var ids = NRM.pages.history.getSelectedIds ? NRM.pages.history.getSelectedIds() : [];
+        if (ids.length === 0) return;
+
+        switch (action) {
+            case 'rollback':
+                NRM.pages.history.batchOp('rollback', ids);
+                break;
+            case 'details':
+                if (ids.length === 1) {
+                    NRM.pages.history.showDetails(ids[0]);
+                }
+                break;
+            case 'hide':
+                NRM.pages.history.batchOp('hide', ids);
+                break;
+            case 'delete':
+                NRM.pages.history.batchOp('delete', ids);
+                break;
+            case 'exclude':
+                NRM.pages.history.batchOp('exclude', ids);
+                break;
+        }
+    }
+
+    // ==================== Tag Dialog (shared) ====================
+
     function showTagDialog(filePaths, projectId) {
         var firstPath = filePaths[0];
         var tags = NRM.bridge.getTagsForFile(firstPath, projectId) || [];
@@ -135,8 +206,6 @@ NRM.components.contextMenu = (function() {
             filePaths.length > 1 ? '<p style="color:var(--text-secondary);font-size:var(--font-size-sm);">将为 ' + filePaths.length + ' 个文件添加标签</p>' : ''
         ].join('');
 
-        var tagNameAdded = false;
-
         function doAddTags() {
             var input = document.getElementById('tag-input');
             if (!input) return;
@@ -145,8 +214,6 @@ NRM.components.contextMenu = (function() {
             filePaths.forEach(function(fp) {
                 NRM.bridge.addTag(fp, tagName, projectId);
             });
-            tagNameAdded = true;
-            input.value = '';
             NRM.components.modal.close();
             NRM.router.refresh();
         }
@@ -177,5 +244,10 @@ NRM.components.contextMenu = (function() {
         return div.innerHTML;
     }
 
-    return { init: init, show: show, hide: hide };
+    return {
+        init: init,
+        show: show,
+        hide: hide,
+        showTagDialog: showTagDialog
+    };
 })();
